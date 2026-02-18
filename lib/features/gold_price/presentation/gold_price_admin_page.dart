@@ -510,6 +510,221 @@ class _AdminEditorState extends State<_AdminEditor> {
   Widget build(BuildContext context) {
     if (_loading) return const Center(child: CircularProgressIndicator());
 
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 980) {
+          return _buildCompactLayout(context);
+        }
+        return _buildDesktopLayout(context);
+      },
+    );
+  }
+
+  Widget _buildDesktopLayout(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    return Row(
+      children: [
+        Container(
+          width: 248,
+          decoration: BoxDecoration(
+            color: cs.surface.withValues(alpha: 0.75),
+            border: Border(right: BorderSide(color: cs.outlineVariant)),
+          ),
+          child: SafeArea(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(20, 20, 20, 12),
+                  child: Text(
+                    'MMGold Admin',
+                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
+                  ),
+                ),
+                const Divider(height: 1),
+                _menuTile('Dashboard', Icons.dashboard_outlined, true),
+                _menuTile(
+                    'Price Updates', Icons.currency_exchange_rounded, true),
+                _menuTile('Image Upload', Icons.image_outlined, false),
+                _menuTile('History', Icons.history_rounded, false),
+                _menuTile('Settings', Icons.settings_outlined, false),
+                const Spacer(),
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: OutlinedButton.icon(
+                    onPressed: widget.onSignOut,
+                    icon: const Icon(Icons.logout),
+                    label: const Text('Sign Out'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(22),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Gold Price Dashboard',
+                        style: TextStyle(
+                          fontSize: 34,
+                          fontWeight: FontWeight.w800,
+                          height: 1.05,
+                        ),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: cs.surface,
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(color: cs.outlineVariant),
+                      ),
+                      child: Text(widget.email),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _statCard(
+                        title: 'YGEA 16',
+                        value: _money(_toInt(_ygea16)),
+                        subtitle: 'Current market price',
+                        primary: true,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: _statCard(
+                        title: 'Status',
+                        value: _saving ? 'Saving...' : 'Ready',
+                        subtitle: 'Supabase admin panel',
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(18),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Price Update Form',
+                            style: TextStyle(
+                                fontSize: 22, fontWeight: FontWeight.w700),
+                          ),
+                          const SizedBox(height: 14),
+                          Wrap(
+                            spacing: 12,
+                            runSpacing: 12,
+                            children: [
+                              _fieldBox('YGEA 16', _ygea16),
+                              _fieldBox('16 Buy', _k16Buy),
+                              _fieldBox('16 Sell', _k16Sell),
+                              _fieldBox('16 New Buy', _k16newBuy),
+                              _fieldBox('16 New Sell', _k16newSell),
+                              _fieldBox('15 Buy', _k15Buy),
+                              _fieldBox('15 Sell', _k15Sell),
+                              _fieldBox('15 New Buy', _k15newBuy),
+                              _fieldBox('15 New Sell', _k15newSell),
+                            ],
+                          ),
+                          const SizedBox(height: 14),
+                          TextFormField(
+                            controller: _imageUrl,
+                            keyboardType: TextInputType.url,
+                            decoration: const InputDecoration(
+                              labelText: 'Image URL (optional)',
+                              prefixIcon: Icon(Icons.image_outlined),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed:
+                                      _uploadingImage ? null : _uploadImage,
+                                  icon: _uploadingImage
+                                      ? const SizedBox(
+                                          width: 16,
+                                          height: 16,
+                                          child: CircularProgressIndicator(
+                                              strokeWidth: 2),
+                                        )
+                                      : const Icon(Icons.upload_file_outlined),
+                                  label: const Text(
+                                      'Upload Image to Supabase Storage'),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              FilledButton.icon(
+                                onPressed: _saving ? null : _save,
+                                icon: const Icon(Icons.save_outlined),
+                                label: const Text('Save Update'),
+                              ),
+                            ],
+                          ),
+                          if (_imageUrl.text.trim().isNotEmpty) ...[
+                            const SizedBox(height: 12),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(10),
+                              child: Image.network(
+                                _imageUrl.text.trim(),
+                                height: 180,
+                                width: double.infinity,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => Container(
+                                  height: 180,
+                                  alignment: Alignment.center,
+                                  color: cs.surfaceContainerHighest,
+                                  child: const Text('Image preview မရပါ'),
+                                ),
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              OutlinedButton(
+                                onPressed: _saving ? null : _loadLatest,
+                                child: const Text('Reload Latest'),
+                              ),
+                              const SizedBox(width: 10),
+                              Text(
+                                'Signed in: ${widget.email}',
+                                style: TextStyle(color: cs.onSurfaceVariant),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCompactLayout(BuildContext context) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Center(
@@ -567,26 +782,6 @@ class _AdminEditorState extends State<_AdminEditor> {
                         label: const Text('Upload Image to Supabase Storage'),
                       ),
                     ),
-                    if (_imageUrl.text.trim().isNotEmpty) ...[
-                      const SizedBox(height: 10),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(10),
-                        child: Image.network(
-                          _imageUrl.text.trim(),
-                          height: 140,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Container(
-                            height: 140,
-                            alignment: Alignment.center,
-                            color: Theme.of(context)
-                                .colorScheme
-                                .surfaceContainerHighest,
-                            child: const Text('Image preview မရပါ'),
-                          ),
-                        ),
-                      ),
-                    ],
                     const SizedBox(height: 18),
                     Row(
                       children: [
@@ -628,5 +823,72 @@ class _AdminEditorState extends State<_AdminEditor> {
         ),
       ),
     );
+  }
+
+  Widget _menuTile(String label, IconData icon, bool selected) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 0),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        decoration: BoxDecoration(
+          color: selected ? cs.primaryContainer.withValues(alpha: 0.45) : null,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 20, color: selected ? cs.primary : cs.onSurface),
+            const SizedBox(width: 10),
+            Text(
+              label,
+              style: TextStyle(
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                color: selected ? cs.primary : cs.onSurface,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _statCard({
+    required String title,
+    required String value,
+    required String subtitle,
+    bool primary = false,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+    return Card(
+      color: primary ? cs.primaryContainer.withValues(alpha: 0.45) : null,
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: TextStyle(color: cs.onSurfaceVariant)),
+            const SizedBox(height: 8),
+            Text(
+              value,
+              style: const TextStyle(fontSize: 34, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 4),
+            Text(subtitle),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _fieldBox(String label, TextEditingController c) {
+    return SizedBox(
+      width: 220,
+      child: _field(label, c),
+    );
+  }
+
+  String _money(int v) {
+    final s = v.toString();
+    return s.replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (m) => ',');
   }
 }

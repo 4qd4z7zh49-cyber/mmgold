@@ -5,8 +5,35 @@ import '../data/domain/gold_price_repo.dart';
 import '../data/domain/gold_price_models.dart';
 import 'gold_price_history_page.dart';
 
-class GoldPricePage extends StatelessWidget {
+class GoldPricePage extends StatefulWidget {
   const GoldPricePage({super.key});
+
+  @override
+  State<GoldPricePage> createState() => _GoldPricePageState();
+}
+
+class _GoldPricePageState extends State<GoldPricePage> {
+  final _repo = GoldPriceRepo();
+  late Future<_GoldPriceViewData> _latestFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _latestFuture = _loadData();
+  }
+
+  Future<void> _refresh() async {
+    setState(() {
+      _latestFuture = _loadData();
+    });
+    await _latestFuture;
+  }
+
+  Future<_GoldPriceViewData> _loadData() async {
+    final latest = await _repo.fetchLatest();
+    final prev = await _repo.fetchLatestHistory();
+    return _GoldPriceViewData(current: latest, previous: prev);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -25,6 +52,11 @@ class GoldPricePage extends StatelessWidget {
               onPressed: () => Navigator.pushNamed(context, '/admin'),
             ),
           IconButton(
+            tooltip: 'Refresh',
+            icon: const Icon(Icons.refresh_rounded),
+            onPressed: _refresh,
+          ),
+          IconButton(
             tooltip: 'History',
             icon: const Icon(Icons.history),
             onPressed: () {
@@ -36,8 +68,8 @@ class GoldPricePage extends StatelessWidget {
           ),
         ],
       ),
-      body: FutureBuilder<GoldPriceLatest?>(
-        future: GoldPriceRepo().fetchLatest(),
+      body: FutureBuilder<_GoldPriceViewData>(
+        future: _latestFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -48,7 +80,8 @@ class GoldPricePage extends StatelessWidget {
             );
           }
 
-          final p = snapshot.data;
+          final p = snapshot.data?.current;
+          final prev = snapshot.data?.previous;
           if (p == null) {
             return const Center(child: Text('ဈေးအချက်အလက် မရှိသေးပါ'));
           }
@@ -112,6 +145,10 @@ class GoldPricePage extends StatelessWidget {
 
                     // ===== 16 K =====
                     _sectionTitle(context, '၁၆ ပဲရည်'),
+                    if (_delta(p.k16Sell, prev?.k16Sell) != null) ...[
+                      _deltaBadge(context, _delta(p.k16Sell, prev?.k16Sell)!),
+                      const SizedBox(height: 8),
+                    ],
                     _priceRow(
                       context,
                       buy: p.k16Buy,
@@ -122,6 +159,11 @@ class GoldPricePage extends StatelessWidget {
 
                     // ===== 16 New =====
                     _sectionTitle(context, '၁၆ ပဲရည် စနစ်သစ်'),
+                    if (_delta(p.k16NewSell, prev?.k16NewSell) != null) ...[
+                      _deltaBadge(
+                          context, _delta(p.k16NewSell, prev?.k16NewSell)!),
+                      const SizedBox(height: 8),
+                    ],
                     _priceRow(
                       context,
                       buy: p.k16NewBuy,
@@ -132,6 +174,10 @@ class GoldPricePage extends StatelessWidget {
 
                     // ===== 15 K =====
                     _sectionTitle(context, '၁၅ ပဲရည်'),
+                    if (_delta(p.k15Sell, prev?.k15Sell) != null) ...[
+                      _deltaBadge(context, _delta(p.k15Sell, prev?.k15Sell)!),
+                      const SizedBox(height: 8),
+                    ],
                     _priceRow(
                       context,
                       buy: p.k15Buy,
@@ -142,6 +188,11 @@ class GoldPricePage extends StatelessWidget {
 
                     // ===== 15 New =====
                     _sectionTitle(context, '၁၅ ပဲရည် စနစ်သစ်'),
+                    if (_delta(p.k15NewSell, prev?.k15NewSell) != null) ...[
+                      _deltaBadge(
+                          context, _delta(p.k15NewSell, prev?.k15NewSell)!),
+                      const SizedBox(height: 8),
+                    ],
                     _priceRow(
                       context,
                       buy: p.k15NewBuy,
@@ -196,14 +247,44 @@ class GoldPricePage extends StatelessWidget {
     );
   }
 
+  Widget _deltaBadge(BuildContext context, int delta) {
+    final cs = Theme.of(context).colorScheme;
+
+    final Color fg;
+    final Color bg;
+    if (delta > 0) {
+      fg = Colors.green.shade700;
+      bg = Colors.green.withValues(alpha: 0.12);
+    } else if (delta < 0) {
+      fg = Colors.red.shade700;
+      bg = Colors.red.withValues(alpha: 0.12);
+    } else {
+      fg = cs.onSurfaceVariant;
+      bg = cs.surfaceContainerHighest;
+    }
+
+    final sign = delta > 0 ? '+' : '';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: fg.withValues(alpha: 0.35)),
+      ),
+      child: Text(
+        '$sign${_money(delta)}',
+        style: TextStyle(fontWeight: FontWeight.w700, color: fg),
+      ),
+    );
+  }
+
   Widget _priceBox(
     BuildContext context, {
     required String label,
     int? value,
   }) {
     final t = Theme.of(context).textTheme;
-
-    // Background color ကို page/card အရောင်နဲ့လိုက်အောင် (soft)
     final cs = Theme.of(context).colorScheme;
     final base = cs.surface.withValues(alpha: 0.9);
 
@@ -212,30 +293,23 @@ class GoldPricePage extends StatelessWidget {
       decoration: BoxDecoration(
         color: base,
         borderRadius: BorderRadius.circular(14),
-
-        // 3D / raised look
         boxShadow: [
-          // Drop shadow (အောက်ဘက်)
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.10),
             blurRadius: 16,
             offset: const Offset(0, 10),
           ),
-          // Soft shadow (နားလည်သန့်)
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.06),
             blurRadius: 6,
             offset: const Offset(0, 2),
           ),
-          // Highlight (အပေါ်ဘက် ကြွသလို)
           BoxShadow(
             color: cs.surface.withValues(alpha: 0.72),
             blurRadius: 10,
             offset: const Offset(-4, -4),
           ),
         ],
-
-        // Border သေးသေးလေး ထည့်ရင် ပို premium
         border: Border.all(
           color: cs.outlineVariant.withValues(alpha: 0.6),
           width: 1,
@@ -255,6 +329,11 @@ class GoldPricePage extends StatelessWidget {
     );
   }
 
+  int? _delta(int? current, int? previous) {
+    if (current == null || previous == null) return null;
+    return current - previous;
+  }
+
   // ===== Utils =====
 
   String _money(int? v) {
@@ -265,4 +344,11 @@ class GoldPricePage extends StatelessWidget {
       (m) => ',',
     );
   }
+}
+
+class _GoldPriceViewData {
+  final GoldPriceLatest? current;
+  final GoldPriceLatest? previous;
+
+  const _GoldPriceViewData({required this.current, required this.previous});
 }

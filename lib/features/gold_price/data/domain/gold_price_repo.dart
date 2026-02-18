@@ -16,6 +16,19 @@ class GoldPriceRepo {
     return GoldPriceLatest.fromMap(Map<String, dynamic>.from(row));
   }
 
+  Future<GoldPriceLatest?> fetchLatestHistory() async {
+    final client = SupabaseProvider.client;
+
+    final rows = await client
+        .from(_historyTable)
+        .select()
+        .order('archived_at', ascending: false)
+        .limit(1);
+
+    if (rows.isEmpty) return null;
+    return GoldPriceLatest.fromMap(Map<String, dynamic>.from(rows.first));
+  }
+
   Stream<List<GoldPriceLatest>> historyStream({int limit = 50}) {
     final client = SupabaseProvider.client;
 
