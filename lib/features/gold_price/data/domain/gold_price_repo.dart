@@ -44,6 +44,40 @@ class GoldPriceRepo {
         );
   }
 
+  Future<List<Map<String, dynamic>>> fetchHistoryRows({int limit = 365}) async {
+    final client = SupabaseProvider.client;
+    final rows = await client
+        .from(_historyTable)
+        .select()
+        .order('date', ascending: false)
+        .order('time', ascending: false)
+        .limit(limit);
+    return rows.map((e) => Map<String, dynamic>.from(e)).toList();
+  }
+
+  Future<void> insertHistoryRow(GoldPriceLatest value) async {
+    final client = SupabaseProvider.client;
+    final map = value.toSupabaseMap();
+    map['updated_at'] = DateTime.now().toIso8601String();
+    map['archived_at'] = DateTime.now().toIso8601String();
+    await client.from(_historyTable).insert(map);
+  }
+
+  Future<void> updateHistoryRow({
+    required int id,
+    required GoldPriceLatest value,
+  }) async {
+    final client = SupabaseProvider.client;
+    final map = value.toSupabaseMap();
+    map['updated_at'] = DateTime.now().toIso8601String();
+    await client.from(_historyTable).update(map).eq('id', id);
+  }
+
+  Future<void> deleteHistoryRow(int id) async {
+    final client = SupabaseProvider.client;
+    await client.from(_historyTable).delete().eq('id', id);
+  }
+
   Future<void> updateLatestAutoHistory(GoldPriceLatest newValue) async {
     final client = SupabaseProvider.client;
 

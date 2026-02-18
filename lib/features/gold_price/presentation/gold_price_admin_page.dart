@@ -296,6 +296,9 @@ class _AdminEditorState extends State<_AdminEditor> {
   bool _loading = true;
   bool _saving = false;
   bool _uploadingImage = false;
+  bool _historyLoading = false;
+  bool _historyBusy = false;
+  List<_HistoryRow> _historyRows = const [];
 
   String _normalizeDigits(String input) {
     const mm = '၀၁၂၃၄၅၆၇၈၉';
@@ -310,6 +313,7 @@ class _AdminEditorState extends State<_AdminEditor> {
   void initState() {
     super.initState();
     _loadLatest();
+    _loadHistory();
   }
 
   @override
@@ -370,6 +374,198 @@ class _AdminEditorState extends State<_AdminEditor> {
 
     if (mounted) {
       setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _loadHistory() async {
+    if (!mounted) return;
+    setState(() => _historyLoading = true);
+    try {
+      final rows = await _repo.fetchHistoryRows(limit: 365);
+      if (!mounted) return;
+      setState(() {
+        _historyRows = rows.map(_HistoryRow.fromMap).toList();
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _historyLoading = false);
+      }
+    }
+  }
+
+  Future<void> _openHistoryEditor([_HistoryRow? row]) async {
+    final dateCtrl = TextEditingController(text: row?.price.date ?? '');
+    final timeCtrl = TextEditingController(text: row?.price.time ?? '');
+    final ygeaCtrl =
+        TextEditingController(text: row?.price.ygea16?.toString() ?? '');
+    final k16BuyCtrl =
+        TextEditingController(text: row?.price.k16Buy?.toString() ?? '');
+    final k16SellCtrl =
+        TextEditingController(text: row?.price.k16Sell?.toString() ?? '');
+    final k16NewBuyCtrl =
+        TextEditingController(text: row?.price.k16newBuy?.toString() ?? '');
+    final k16NewSellCtrl =
+        TextEditingController(text: row?.price.k16newSell?.toString() ?? '');
+    final k15BuyCtrl =
+        TextEditingController(text: row?.price.k15Buy?.toString() ?? '');
+    final k15SellCtrl =
+        TextEditingController(text: row?.price.k15Sell?.toString() ?? '');
+    final k15NewBuyCtrl =
+        TextEditingController(text: row?.price.k15newBuy?.toString() ?? '');
+    final k15NewSellCtrl =
+        TextEditingController(text: row?.price.k15newSell?.toString() ?? '');
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(row == null ? 'Add History Row' : 'Edit History Row'),
+        content: SizedBox(
+          width: 640,
+          child: SingleChildScrollView(
+            child: Column(
+              children: [
+                TextField(
+                  controller: dateCtrl,
+                  decoration:
+                      const InputDecoration(labelText: 'Date (YYYY-MM-DD)'),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: timeCtrl,
+                  decoration:
+                      const InputDecoration(labelText: 'Time (hh:mm AM/PM)'),
+                ),
+                const SizedBox(height: 8),
+                _historyNumField('YGEA 16', ygeaCtrl),
+                _historyNumField('16 Buy', k16BuyCtrl),
+                _historyNumField('16 Sell', k16SellCtrl),
+                _historyNumField('16 New Buy', k16NewBuyCtrl),
+                _historyNumField('16 New Sell', k16NewSellCtrl),
+                _historyNumField('15 Buy', k15BuyCtrl),
+                _historyNumField('15 Sell', k15SellCtrl),
+                _historyNumField('15 New Buy', k15NewBuyCtrl),
+                _historyNumField('15 New Sell', k15NewSellCtrl),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+
+    if (ok != true) {
+      dateCtrl.dispose();
+      timeCtrl.dispose();
+      ygeaCtrl.dispose();
+      k16BuyCtrl.dispose();
+      k16SellCtrl.dispose();
+      k16NewBuyCtrl.dispose();
+      k16NewSellCtrl.dispose();
+      k15BuyCtrl.dispose();
+      k15SellCtrl.dispose();
+      k15NewBuyCtrl.dispose();
+      k15NewSellCtrl.dispose();
+      return;
+    }
+
+    final model = GoldPriceLatest(
+      date: dateCtrl.text.trim().isEmpty ? null : dateCtrl.text.trim(),
+      time: timeCtrl.text.trim().isEmpty ? null : timeCtrl.text.trim(),
+      ygea16: _parseHistoryInt(ygeaCtrl.text),
+      k16Buy: _parseHistoryInt(k16BuyCtrl.text),
+      k16Sell: _parseHistoryInt(k16SellCtrl.text),
+      k16newBuy: _parseHistoryInt(k16NewBuyCtrl.text),
+      k16newSell: _parseHistoryInt(k16NewSellCtrl.text),
+      k15Buy: _parseHistoryInt(k15BuyCtrl.text),
+      k15Sell: _parseHistoryInt(k15SellCtrl.text),
+      k15newBuy: _parseHistoryInt(k15NewBuyCtrl.text),
+      k15newSell: _parseHistoryInt(k15NewSellCtrl.text),
+      imageUrl: row?.price.imageUrl,
+    );
+
+    dateCtrl.dispose();
+    timeCtrl.dispose();
+    ygeaCtrl.dispose();
+    k16BuyCtrl.dispose();
+    k16SellCtrl.dispose();
+    k16NewBuyCtrl.dispose();
+    k16NewSellCtrl.dispose();
+    k15BuyCtrl.dispose();
+    k15SellCtrl.dispose();
+    k15NewBuyCtrl.dispose();
+    k15NewSellCtrl.dispose();
+
+    setState(() => _historyBusy = true);
+    try {
+      if (row == null) {
+        await _repo.insertHistoryRow(model);
+      } else {
+        await _repo.updateHistoryRow(id: row.id, value: model);
+      }
+      await _loadHistory();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(row == null
+              ? 'History row ထည့်ပြီးပါပြီ'
+              : 'History row ပြင်ပြီးပါပြီ'),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('History row save မအောင်မြင်ပါ')),
+      );
+    } finally {
+      if (mounted) setState(() => _historyBusy = false);
+    }
+  }
+
+  Future<void> _deleteHistory(_HistoryRow row) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete History'),
+        content:
+            Text('Delete ${row.price.date ?? ''} ${row.price.time ?? ''} ?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (ok != true) return;
+    setState(() => _historyBusy = true);
+    try {
+      await _repo.deleteHistoryRow(row.id);
+      await _loadHistory();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('History row ဖျက်ပြီးပါပြီ')),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('History row delete မအောင်မြင်ပါ')),
+      );
+    } finally {
+      if (mounted) setState(() => _historyBusy = false);
     }
   }
 
@@ -503,6 +699,135 @@ class _AdminEditorState extends State<_AdminEditor> {
         FilteringTextInputFormatter.allow(RegExp(r'[0-9၀-၉,\s]')),
       ],
       decoration: InputDecoration(labelText: label),
+    );
+  }
+
+  Widget _historyNumField(String label, TextEditingController c) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: TextField(
+        controller: c,
+        keyboardType: TextInputType.number,
+        inputFormatters: [
+          FilteringTextInputFormatter.allow(RegExp(r'[0-9၀-၉,\s]')),
+        ],
+        decoration: InputDecoration(labelText: label),
+      ),
+    );
+  }
+
+  int? _parseHistoryInt(String value) {
+    final cleaned =
+        _normalizeDigits(value).trim().replaceAll(',', '').replaceAll(' ', '');
+    if (cleaned.isEmpty) return null;
+    return int.tryParse(cleaned);
+  }
+
+  Widget _historyManagerPanel() {
+    final cs = Theme.of(context).colorScheme;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'History Manager',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+                  ),
+                ),
+                OutlinedButton.icon(
+                  onPressed: (_historyBusy || _historyLoading)
+                      ? null
+                      : () => _openHistoryEditor(),
+                  icon: const Icon(Icons.add),
+                  label: const Text('Add Row'),
+                ),
+                const SizedBox(width: 8),
+                OutlinedButton.icon(
+                  onPressed:
+                      (_historyBusy || _historyLoading) ? null : _loadHistory,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Reload'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'တစ်နှစ်စာ history ကို ဒီနေရာမှာ ကိုယ်တိုင် Add / Edit / Delete လုပ်နိုင်ပါတယ်။',
+              style: TextStyle(color: cs.onSurfaceVariant),
+            ),
+            const SizedBox(height: 12),
+            if (_historyLoading)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 24),
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else if (_historyRows.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 20),
+                child: Text('History data မရှိသေးပါ'),
+              )
+            else
+              Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: cs.outlineVariant),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  children: [
+                    for (final row in _historyRows.take(60))
+                      Column(
+                        children: [
+                          ListTile(
+                            dense: true,
+                            title: Text(
+                              '${row.price.date ?? '-'}   ${row.price.time ?? '-'}',
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w700),
+                            ),
+                            subtitle: Text(
+                              '16 Sell: ${_money(row.price.k16Sell ?? 0)} | '
+                              '16 New Sell: ${_money(row.price.k16newSell ?? 0)} | '
+                              '15 Sell: ${_money(row.price.k15Sell ?? 0)} | '
+                              '15 New Sell: ${_money(row.price.k15newSell ?? 0)}',
+                            ),
+                            trailing: Wrap(
+                              spacing: 6,
+                              children: [
+                                IconButton(
+                                  tooltip: 'Edit',
+                                  onPressed: _historyBusy
+                                      ? null
+                                      : () => _openHistoryEditor(row),
+                                  icon: const Icon(Icons.edit_outlined),
+                                ),
+                                IconButton(
+                                  tooltip: 'Delete',
+                                  onPressed: _historyBusy
+                                      ? null
+                                      : () => _deleteHistory(row),
+                                  icon: Icon(
+                                    Icons.delete_outline,
+                                    color: cs.error,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Divider(height: 1, color: cs.outlineVariant),
+                        ],
+                      ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -716,6 +1041,8 @@ class _AdminEditorState extends State<_AdminEditor> {
                     ),
                   ),
                 ),
+                const SizedBox(height: 16),
+                _historyManagerPanel(),
               ],
             ),
           ),
@@ -815,6 +1142,8 @@ class _AdminEditorState extends State<_AdminEditor> {
                         child: const Text('Sign Out'),
                       ),
                     ),
+                    const SizedBox(height: 16),
+                    _historyManagerPanel(),
                   ],
                 ),
               ),
@@ -890,5 +1219,19 @@ class _AdminEditorState extends State<_AdminEditor> {
   String _money(int v) {
     final s = v.toString();
     return s.replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (m) => ',');
+  }
+}
+
+class _HistoryRow {
+  final int id;
+  final GoldPriceLatest price;
+
+  const _HistoryRow({required this.id, required this.price});
+
+  factory _HistoryRow.fromMap(Map<String, dynamic> m) {
+    return _HistoryRow(
+      id: (m['id'] as num?)?.toInt() ?? 0,
+      price: GoldPriceLatest.fromMap(m),
+    );
   }
 }
