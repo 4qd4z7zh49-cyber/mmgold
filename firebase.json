@@ -1,0 +1,61 @@
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "gold-calculator-4daba",
+          "appId": "1:827818374738:android:0480c85f9c57520f6fd18b",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "ios": {
+        "default": {
+          "projectId": "gold-calculator-4daba",
+          "appId": "1:827818374738:ios:d4b622e57ee978876fd18b",
+          "uploadDebugSymbols": false,
+          "fileOutput": "ios/Runner/GoogleService-Info.plist"
+        }
+      },
+      "macos": {
+        "default": {
+          "projectId": "gold-calculator-4daba",
+          "appId": "1:827818374738:ios:d4b622e57ee978876fd18b",
+          "uploadDebugSymbols": false,
+          "fileOutput": "macos/Runner/GoogleService-Info.plist"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "gold-calculator-4daba",
+          "configurations": {
+            "android": "1:827818374738:android:0480c85f9c57520f6fd18b",
+            "ios": "1:827818374738:ios:d4b622e57ee978876fd18b",
+            "macos": "1:827818374738:ios:d4b622e57ee978876fd18b",
+            "web": "1:827818374738:web:7c4cf1e4998987806fd18b",
+            "windows": "1:827818374738:web:d1a7e1ed5954e37e6fd18b"
+          }
+        }
+      }
+    }
+  },
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "disallowLegacyRuntimeConfig": true,
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "*.local"
+      ],
+      "predeploy": [
+        "npm --prefix \"$RESOURCE_DIR\" run lint"
+      ]
+    }
+  ]
+}

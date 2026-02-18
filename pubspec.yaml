@@ -1,0 +1,58 @@
+name: mmgold
+description: "Myanmar Gold Calculator App"
+publish_to: "none"
+
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.6.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Local storage
+  shared_preferences: ^2.5.4
+
+  # Screenshot + share (voucher export)
+  share_plus: ^10.0.2
+  path_provider: ^2.1.4
+  pdf: ^3.11.1
+  printing: ^5.13.4
+
+  # Supabase (Gold price + admin dashboard)
+  supabase_flutter: ^2.10.4
+  file_picker: ^10.3.2
+
+  # Graph
+  fl_chart: ^1.1.1
+
+  device_info_plus: ^11.0.0
+  package_info_plus: ^8.0.0
+  google_mobile_ads: ^6.0.0
+
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/fonts/NotoSansMyanmar-Regular.ttf
+    - assets/fonts/NotoSansMyanmar-Bold.ttf
+
+  fonts:
+    - family: Padauk
+      fonts:
+        - asset: assets/fonts/Padauk-Regular.ttf
+        - asset: assets/fonts/Padauk-Bold.ttf
+          weight: 700
+    - family: NotoSansMyanmar
+      fonts:
+        - asset: assets/fonts/NotoSansMyanmar-Regular.ttf
+        - asset: assets/fonts/NotoSansMyanmar-Bold.ttf
+          weight: 700

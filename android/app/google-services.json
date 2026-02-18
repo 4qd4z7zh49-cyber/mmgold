@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "827818374738",
+    "project_id": "gold-calculator-4daba",
+    "storage_bucket": "gold-calculator-4daba.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:827818374738:android:0480c85f9c57520f6fd18b",
+        "android_client_info": {
+          "package_name": "com.example.mmgold"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "827818374738-r11l3plil8qe7bdg3tq2jr91cm154rl5.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC9uYDOaaLY6TkK4Gxgqy9YSOnuizwGlr0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "827818374738-r11l3plil8qe7bdg3tq2jr91cm154rl5.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "827818374738-hrg210mc8iauvd3ticiejrd146ree3aq.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.mmgold"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,0 +1,35 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isAdmin() {
+      return request.auth != null &&
+          exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    // Gold price data (public read, admin write)
+    match /gold_prices/latest/current/value {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /gold_prices/history/items/{itemId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Admin marker docs (create/edit from Firebase Console)
+    match /admins/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    // Existing premium license flow in this app currently uses client read/write.
+    match /licenses/{code} {
+      allow read, write: if true;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
