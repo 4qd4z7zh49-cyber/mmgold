@@ -299,6 +299,15 @@ class _AdminEditorState extends State<_AdminEditor> {
   bool _historyLoading = false;
   bool _historyBusy = false;
   List<_HistoryRow> _historyRows = const [];
+  final ScrollController _desktopScroll = ScrollController();
+  _AdminSection _selectedSection = _AdminSection.dashboard;
+  final Map<_AdminSection, GlobalKey> _sectionKeys = {
+    _AdminSection.dashboard: GlobalKey(),
+    _AdminSection.priceUpdates: GlobalKey(),
+    _AdminSection.imageUpload: GlobalKey(),
+    _AdminSection.history: GlobalKey(),
+    _AdminSection.settings: GlobalKey(),
+  };
 
   String _normalizeDigits(String input) {
     const mm = '၀၁၂၃၄၅၆၇၈၉';
@@ -318,6 +327,7 @@ class _AdminEditorState extends State<_AdminEditor> {
 
   @override
   void dispose() {
+    _desktopScroll.dispose();
     _ygea16.dispose();
     _k16Buy.dispose();
     _k16Sell.dispose();
@@ -329,6 +339,18 @@ class _AdminEditorState extends State<_AdminEditor> {
     _k15newSell.dispose();
     _imageUrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _jumpTo(_AdminSection section) async {
+    setState(() => _selectedSection = section);
+    final ctx = _sectionKeys[section]?.currentContext;
+    if (ctx == null) return;
+    await Scrollable.ensureVisible(
+      ctx,
+      duration: const Duration(milliseconds: 280),
+      curve: Curves.easeOutCubic,
+      alignment: 0.08,
+    );
   }
 
   int _toInt(TextEditingController c) {
@@ -868,12 +890,36 @@ class _AdminEditorState extends State<_AdminEditor> {
                   ),
                 ),
                 const Divider(height: 1),
-                _menuTile('Dashboard', Icons.dashboard_outlined, true),
                 _menuTile(
-                    'Price Updates', Icons.currency_exchange_rounded, true),
-                _menuTile('Image Upload', Icons.image_outlined, false),
-                _menuTile('History', Icons.history_rounded, false),
-                _menuTile('Settings', Icons.settings_outlined, false),
+                  'Dashboard',
+                  Icons.dashboard_outlined,
+                  _selectedSection == _AdminSection.dashboard,
+                  () => _jumpTo(_AdminSection.dashboard),
+                ),
+                _menuTile(
+                  'Price Updates',
+                  Icons.currency_exchange_rounded,
+                  _selectedSection == _AdminSection.priceUpdates,
+                  () => _jumpTo(_AdminSection.priceUpdates),
+                ),
+                _menuTile(
+                  'Image Upload',
+                  Icons.image_outlined,
+                  _selectedSection == _AdminSection.imageUpload,
+                  () => _jumpTo(_AdminSection.imageUpload),
+                ),
+                _menuTile(
+                  'History',
+                  Icons.history_rounded,
+                  _selectedSection == _AdminSection.history,
+                  () => _jumpTo(_AdminSection.history),
+                ),
+                _menuTile(
+                  'Settings',
+                  Icons.settings_outlined,
+                  _selectedSection == _AdminSection.settings,
+                  () => _jumpTo(_AdminSection.settings),
+                ),
                 const Spacer(),
                 Padding(
                   padding: const EdgeInsets.all(16),
@@ -889,10 +935,12 @@ class _AdminEditorState extends State<_AdminEditor> {
         ),
         Expanded(
           child: SingleChildScrollView(
+            controller: _desktopScroll,
             padding: const EdgeInsets.all(22),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Container(key: _sectionKeys[_AdminSection.dashboard]),
                 Row(
                   children: [
                     const Expanded(
@@ -939,6 +987,7 @@ class _AdminEditorState extends State<_AdminEditor> {
                   ],
                 ),
                 const SizedBox(height: 18),
+                Container(key: _sectionKeys[_AdminSection.priceUpdates]),
                 Card(
                   child: Padding(
                     padding: const EdgeInsets.all(18),
@@ -969,6 +1018,8 @@ class _AdminEditorState extends State<_AdminEditor> {
                             ],
                           ),
                           const SizedBox(height: 14),
+                          Container(
+                              key: _sectionKeys[_AdminSection.imageUpload]),
                           TextFormField(
                             controller: _imageUrl,
                             keyboardType: TextInputType.url,
@@ -1042,7 +1093,37 @@ class _AdminEditorState extends State<_AdminEditor> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                _historyManagerPanel(),
+                Container(
+                  key: _sectionKeys[_AdminSection.history],
+                  child: _historyManagerPanel(),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  key: _sectionKeys[_AdminSection.settings],
+                  child: Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Row(
+                        children: [
+                          const Expanded(
+                            child: Text(
+                              'Settings',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          OutlinedButton.icon(
+                            onPressed: widget.onSignOut,
+                            icon: const Icon(Icons.logout),
+                            label: const Text('Sign Out'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -1154,28 +1235,38 @@ class _AdminEditorState extends State<_AdminEditor> {
     );
   }
 
-  Widget _menuTile(String label, IconData icon, bool selected) {
+  Widget _menuTile(
+    String label,
+    IconData icon,
+    bool selected,
+    VoidCallback onTap,
+  ) {
     final cs = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.fromLTRB(10, 8, 10, 0),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        decoration: BoxDecoration(
-          color: selected ? cs.primaryContainer.withValues(alpha: 0.45) : null,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, size: 20, color: selected ? cs.primary : cs.onSurface),
-            const SizedBox(width: 10),
-            Text(
-              label,
-              style: TextStyle(
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                color: selected ? cs.primary : cs.onSurface,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          decoration: BoxDecoration(
+            color:
+                selected ? cs.primaryContainer.withValues(alpha: 0.45) : null,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              Icon(icon, size: 20, color: selected ? cs.primary : cs.onSurface),
+              const SizedBox(width: 10),
+              Text(
+                label,
+                style: TextStyle(
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                  color: selected ? cs.primary : cs.onSurface,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -1234,4 +1325,12 @@ class _HistoryRow {
       price: GoldPriceLatest.fromMap(m),
     );
   }
+}
+
+enum _AdminSection {
+  dashboard,
+  priceUpdates,
+  imageUpload,
+  history,
+  settings,
 }
