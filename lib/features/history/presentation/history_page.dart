@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:mmgold/features/calculator/data/history_store.dart';
+import 'package:mmgold/features/calculator/domain/calculator_types.dart';
 import 'package:mmgold/features/calculator/presentation/widgets/voucher_sheet.dart';
 import 'package:mmgold/shared/utils/mm_weight.dart';
 import 'package:mmgold/shared/ads/interstitial_ad_manager.dart';
@@ -15,7 +16,7 @@ class HistoryPage extends StatefulWidget {
 
 class _HistoryPageState extends State<HistoryPage> {
   late Future<List<Map<String, dynamic>>> _future;
-  final Set<String> _selectedIds = {}; // multi-select
+  final Set<String> _selectedIds = {};
 
   @override
   void initState() {
@@ -64,6 +65,37 @@ class _HistoryPageState extends State<HistoryPage> {
     final l = dt.toLocal();
     String two(int n) => n.toString().padLeft(2, '0');
     return '${two(l.day)}/${two(l.month)}/${l.year}  ${two(l.hour)}:${two(l.minute)}';
+  }
+
+  double _toNum(dynamic raw) {
+    if (raw is num) return raw.toDouble();
+    return double.tryParse((raw ?? '').toString()) ?? 0;
+  }
+
+  String _normalizeNum(String raw) {
+    return raw.trim().replaceAll(',', '').replaceAll(' ', '');
+  }
+
+  double _discountAmount({
+    required String mode,
+    required String unit,
+    required double value,
+    required double baseAmount,
+  }) {
+    switch (mode) {
+      case 'mmk':
+        return value;
+      case 'percent':
+        return baseAmount * (value / 100);
+      case 'custom':
+        if (unit == DiscountUnit.percent.name) {
+          return baseAmount * (value / 100);
+        }
+        return value;
+      case 'none':
+      default:
+        return 0;
+    }
   }
 
   Future<void> _openVoucher(Map<String, dynamic> it) async {
@@ -124,7 +156,287 @@ class _HistoryPageState extends State<HistoryPage> {
   Future<void> _deleteSelected() async {
     if (_selectedIds.isEmpty) return;
     await HistoryStore.deleteMany(_selectedIds);
-    _selectedIds.clear();
+    if (!mounted) return;
+    setState(() => _selectedIds.clear());
+    _reload();
+  }
+
+  Future<void> _deleteOne(Map<String, dynamic> item) async {
+    final id = (item['id'] ?? '').toString();
+    if (id.isEmpty) return;
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete history'),
+        content: const Text('ဒီ history row ကို ဖျက်မှာ သေချာပါသလား?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (ok != true) return;
+
+    await HistoryStore.deleteMany({id});
+    if (!mounted) return;
+    setState(() => _selectedIds.remove(id));
+    _reload();
+  }
+
+  Future<void> _openEditor(Map<String, dynamic> item) async {
+    final id = (item['id'] ?? '').toString();
+    if (id.isEmpty) return;
+
+    final marketCtrl = TextEditingController(text: _toNum(item['market16']).toStringAsFixed(0));
+    final weightCtrl = TextEditingController(text: _toNum(item['weightKyattha']).toStringAsFixed(6));
+    final discountCtrl = TextEditingController(text: _toNum(item['discountValue']).toStringAsFixed(2));
+    final paidCtrl = TextEditingController(
+      text: item['paidAmount'] is num ? _toNum(item['paidAmount']).toStringAsFixed(0) : '',
+    );
+
+    var action = (item['action'] ?? ActionType.buy.name).toString();
+    if (!ActionType.values.any((e) => e.name == action)) {
+      action = ActionType.buy.name;
+    }
+
+    var goldForm = (item['goldForm'] ?? GoldForm.bar.name).toString();
+    if (!GoldForm.values.any((e) => e.name == goldForm)) {
+      goldForm = GoldForm.bar.name;
+    }
+
+    final purityList = GoldPurity.factor.keys.toList(growable: false);
+    var goldType = (item['goldType'] ?? '').toString();
+    if (!purityList.contains(goldType)) {
+      goldType = purityList.first;
+    }
+
+    final discountModes = DiscountMode.values.map((e) => e.name).toList(growable: false);
+    var discountMode = (item['discountMode'] ?? DiscountMode.none.name).toString();
+    if (!discountModes.contains(discountMode)) {
+      discountMode = DiscountMode.none.name;
+    }
+
+    var discountUnit = (item['discountUnit'] ?? DiscountUnit.mmk.name).toString();
+    if (!DiscountUnit.values.any((e) => e.name == discountUnit)) {
+      discountUnit = DiscountUnit.mmk.name;
+    }
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setDialog) => AlertDialog(
+            title: const Text('Edit history'),
+            content: SizedBox(
+              width: 460,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    DropdownButtonFormField<String>(
+                      initialValue: action,
+                      decoration: const InputDecoration(labelText: 'Action'),
+                      items: const [
+                        DropdownMenuItem(value: 'buy', child: Text('အဝယ်')),
+                        DropdownMenuItem(value: 'sell', child: Text('အရောင်း')),
+                      ],
+                      onChanged: (v) {
+                        if (v == null) return;
+                        setDialog(() => action = v);
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<String>(
+                      initialValue: goldForm,
+                      decoration: const InputDecoration(labelText: 'Gold form'),
+                      items: const [
+                        DropdownMenuItem(value: 'bar', child: Text('အတုံး')),
+                        DropdownMenuItem(value: 'ornament', child: Text('အထည်')),
+                      ],
+                      onChanged: (v) {
+                        if (v == null) return;
+                        setDialog(() => goldForm = v);
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<String>(
+                      initialValue: goldType,
+                      decoration: const InputDecoration(labelText: 'Gold type'),
+                      items: [
+                        for (final p in purityList)
+                          DropdownMenuItem(value: p, child: Text(p)),
+                      ],
+                      onChanged: (v) {
+                        if (v == null) return;
+                        setDialog(() => goldType = v);
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: marketCtrl,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(labelText: '16 Price'),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: weightCtrl,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(labelText: 'Weight (kyattha)'),
+                    ),
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<String>(
+                      initialValue: discountMode,
+                      decoration: const InputDecoration(labelText: 'Discount mode'),
+                      items: [
+                        for (final m in discountModes)
+                          DropdownMenuItem(value: m, child: Text(m)),
+                      ],
+                      onChanged: (v) {
+                        if (v == null) return;
+                        setDialog(() => discountMode = v);
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    if (discountMode == DiscountMode.custom.name)
+                      DropdownButtonFormField<String>(
+                        initialValue: discountUnit,
+                        decoration: const InputDecoration(labelText: 'Discount unit'),
+                        items: const [
+                          DropdownMenuItem(value: 'mmk', child: Text('MMK')),
+                          DropdownMenuItem(value: 'percent', child: Text('Percent')),
+                        ],
+                        onChanged: (v) {
+                          if (v == null) return;
+                          setDialog(() => discountUnit = v);
+                        },
+                      ),
+                    if (discountMode == DiscountMode.custom.name) const SizedBox(height: 10),
+                    TextField(
+                      controller: discountCtrl,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(labelText: 'Discount value'),
+                    ),
+                    if (action == ActionType.sell.name) ...[
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: paidCtrl,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        decoration: const InputDecoration(labelText: 'Paid amount'),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Save'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (saved != true) return;
+
+    final market16 = double.tryParse(_normalizeNum(marketCtrl.text)) ?? 0;
+    final weightKyattha = double.tryParse(_normalizeNum(weightCtrl.text)) ?? 0;
+    final discountValue = double.tryParse(_normalizeNum(discountCtrl.text)) ?? 0;
+
+    final paidAmount = action == ActionType.sell.name
+        ? double.tryParse(_normalizeNum(paidCtrl.text))
+        : null;
+
+    if (market16 <= 0 || weightKyattha <= 0) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('16 price နဲ့ weight ကို မှန်ကန်စွာထည့်ပါ')),
+      );
+      return;
+    }
+
+    final factor = GoldPurity.factor[goldType] ?? 1.0;
+    final baseAmount = market16 * weightKyattha * factor;
+
+    final effectiveUnit = discountMode == DiscountMode.custom.name
+        ? discountUnit
+        : (discountMode == DiscountMode.percent.name
+            ? DiscountUnit.percent.name
+            : DiscountUnit.mmk.name);
+
+    final discountAmount = _discountAmount(
+      mode: discountMode,
+      unit: effectiveUnit,
+      value: discountValue,
+      baseAmount: baseAmount,
+    );
+
+    final denom = market16 * factor;
+    final discountWeightKyattha = (discountAmount <= 0 || denom <= 0)
+        ? 0.0
+        : discountAmount / denom;
+
+    final netWeightKyattha = action == ActionType.buy.name
+        ? (weightKyattha + discountWeightKyattha)
+        : (weightKyattha - discountWeightKyattha);
+
+    if (netWeightKyattha < 0) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Discount ကြောင့် net weight အနုတ်မဖြစ်ရပါ')),
+      );
+      return;
+    }
+
+    final finalAmount = market16 * netWeightKyattha * factor;
+
+    double? buyTime16;
+    if (action == ActionType.sell.name && paidAmount != null && paidAmount > 0) {
+      final buyNetWeight = weightKyattha + discountWeightKyattha;
+      if (buyNetWeight > 0 && factor > 0) {
+        buyTime16 = paidAmount / (buyNetWeight * factor);
+      }
+    }
+
+    final profitLoss =
+        (action == ActionType.sell.name && paidAmount != null && paidAmount > 0)
+            ? (finalAmount - paidAmount)
+            : null;
+
+    final updated = Map<String, dynamic>.from(item)
+      ..['id'] = id
+      ..['action'] = action
+      ..['goldForm'] = goldForm
+      ..['goldType'] = goldType
+      ..['market16'] = market16
+      ..['weightKyattha'] = weightKyattha
+      ..['discountMode'] = discountMode
+      ..['discountUnit'] = effectiveUnit
+      ..['discountValue'] = discountValue
+      ..['discountAmount'] = discountAmount
+      ..['discountWeightKyattha'] = discountWeightKyattha
+      ..['netWeightKyattha'] = netWeightKyattha
+      ..['baseAmount'] = baseAmount
+      ..['finalAmount'] = finalAmount
+      ..['paidAmount'] = action == ActionType.sell.name ? paidAmount : null
+      ..['buyTime16'] = action == ActionType.sell.name ? buyTime16 : null
+      ..['profitLoss'] = profitLoss;
+
+    await HistoryStore.updateById(id: id, value: updated);
     if (!mounted) return;
     _reload();
   }
@@ -307,6 +619,22 @@ class _HistoryPageState extends State<HistoryPage> {
                           ],
                         ),
                       ),
+                      if (!_isSelectionMode && id.isNotEmpty)
+                        Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              tooltip: 'Edit',
+                              icon: const Icon(Icons.edit_outlined),
+                              onPressed: () => _openEditor(it),
+                            ),
+                            IconButton(
+                              tooltip: 'Delete',
+                              icon: Icon(Icons.delete_outline, color: cs.error),
+                              onPressed: () => _deleteOne(it),
+                            ),
+                          ],
+                        ),
                     ],
                   ),
                 ),

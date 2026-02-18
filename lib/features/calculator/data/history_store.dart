@@ -25,7 +25,18 @@ class HistoryStore {
 
   static Future<void> deleteMany(Set<String> ids) async {
     final list = await load();
-    list.removeWhere((e) => ids.contains(e['id']));
+    list.removeWhere((e) => ids.contains((e['id'] ?? '').toString()));
+    await saveAll(list);
+  }
+
+  static Future<void> updateById({
+    required String id,
+    required Map<String, dynamic> value,
+  }) async {
+    final list = await load();
+    final index = list.indexWhere((e) => (e['id'] ?? '').toString() == id);
+    if (index < 0) return;
+    list[index] = value;
     await saveAll(list);
   }
 
