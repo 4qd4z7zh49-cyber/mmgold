@@ -531,6 +531,9 @@ class _AdminEditorState extends State<_AdminEditor> {
       if (row == null) {
         await _repo.insertHistoryRow(model);
       } else {
+        if (row.id.toString().isEmpty) {
+          throw Exception('Missing history row id');
+        }
         await _repo.updateHistoryRow(id: row.id, value: model);
       }
       await _loadHistory();
@@ -573,6 +576,13 @@ class _AdminEditorState extends State<_AdminEditor> {
     );
 
     if (ok != true) return;
+    if (row.id.toString().isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('History row id မရှိလို့ မဖျက်နိုင်ပါ')),
+      );
+      return;
+    }
     setState(() => _historyBusy = true);
     try {
       await _repo.deleteHistoryRow(row.id);
@@ -1314,14 +1324,15 @@ class _AdminEditorState extends State<_AdminEditor> {
 }
 
 class _HistoryRow {
-  final int id;
+  final Object id;
   final GoldPriceLatest price;
 
   const _HistoryRow({required this.id, required this.price});
 
   factory _HistoryRow.fromMap(Map<String, dynamic> m) {
+    final rawId = m['id'];
     return _HistoryRow(
-      id: (m['id'] as num?)?.toInt() ?? 0,
+      id: rawId is num ? rawId.toInt() : (rawId?.toString() ?? ''),
       price: GoldPriceLatest.fromMap(m),
     );
   }

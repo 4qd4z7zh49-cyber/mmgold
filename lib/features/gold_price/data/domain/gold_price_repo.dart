@@ -64,7 +64,7 @@ class GoldPriceRepo {
   }
 
   Future<void> updateHistoryRow({
-    required int id,
+    required Object id,
     required GoldPriceLatest value,
   }) async {
     final client = SupabaseProvider.client;
@@ -73,7 +73,7 @@ class GoldPriceRepo {
     await client.from(_historyTable).update(map).eq('id', id);
   }
 
-  Future<void> deleteHistoryRow(int id) async {
+  Future<void> deleteHistoryRow(Object id) async {
     final client = SupabaseProvider.client;
     await client.from(_historyTable).delete().eq('id', id);
   }
