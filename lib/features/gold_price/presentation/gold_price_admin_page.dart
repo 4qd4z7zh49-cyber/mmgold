@@ -720,8 +720,9 @@ class _AdminEditorState extends State<_AdminEditor> {
       String? notifyError;
       try {
         await _sendPriceUpdateNotification(model);
-      } catch (_) {
-        notifyError = 'ဈေး update သိပေး notification မပို့နိုင်ပါ';
+      } catch (e) {
+        notifyError =
+            'ဈေး update သိပေး notification မပို့နိုင်ပါ (${_shortError(e)})';
       }
 
       if (!mounted) return;
@@ -790,10 +791,12 @@ class _AdminEditorState extends State<_AdminEditor> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Notification ပို့ပြီးပါပြီ')),
       );
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Notification မပို့နိုင်ပါ')),
+        SnackBar(
+          content: Text('Notification မပို့နိုင်ပါ (${_shortError(e)})'),
+        ),
       );
     } finally {
       if (mounted) {
@@ -833,6 +836,12 @@ class _AdminEditorState extends State<_AdminEditor> {
         _normalizeDigits(value).trim().replaceAll(',', '').replaceAll(' ', '');
     if (cleaned.isEmpty) return null;
     return int.tryParse(cleaned);
+  }
+
+  String _shortError(Object error, {int max = 120}) {
+    final value = error.toString().replaceFirst('Exception: ', '').trim();
+    if (value.length <= max) return value;
+    return '${value.substring(0, max)}...';
   }
 
   Widget _notificationPanel() {
