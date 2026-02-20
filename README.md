@@ -56,9 +56,32 @@ create table if not exists public.admins (
   created_at timestamptz default now()
 );
 
+create table if not exists public.app_notifications (
+  id bigint generated always as identity primary key,
+  title text not null,
+  body text not null,
+  target text not null default 'gold_price',
+  type text not null default 'admin_custom',
+  payload jsonb not null default '{}'::jsonb,
+  created_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.app_push_tokens (
+  id bigint generated always as identity primary key,
+  token text not null unique,
+  platform text not null,
+  is_active boolean not null default true,
+  last_seen_at timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 alter table public.gold_price_latest enable row level security;
 alter table public.gold_price_history enable row level security;
 alter table public.admins enable row level security;
+alter table public.app_notifications enable row level security;
+alter table public.app_push_tokens enable row level security;
 
 drop policy if exists "read latest" on public.gold_price_latest;
 create policy "read latest" on public.gold_price_latest for select using (true);
@@ -77,10 +100,54 @@ create policy "admin insert history" on public.gold_price_history
 for insert to authenticated
 with check (exists (select 1 from public.admins a where a.user_id = auth.uid()));
 
+drop policy if exists "read app notifications" on public.app_notifications;
+create policy "read app notifications" on public.app_notifications
+for select using (true);
+
+drop policy if exists "admin insert app notifications" on public.app_notifications;
+create policy "admin insert app notifications" on public.app_notifications
+for insert to authenticated
+with check (exists (select 1 from public.admins a where a.user_id = auth.uid()));
+
+drop policy if exists "anon upsert push tokens" on public.app_push_tokens;
+create policy "anon upsert push tokens" on public.app_push_tokens
+for insert to anon
+with check (true);
+
+drop policy if exists "anon update push tokens" on public.app_push_tokens;
+create policy "anon update push tokens" on public.app_push_tokens
+for update to anon
+using (true)
+with check (true);
+
+drop policy if exists "admin read push tokens" on public.app_push_tokens;
+create policy "admin read push tokens" on public.app_push_tokens
+for select to authenticated
+using (exists (select 1 from public.admins a where a.user_id = auth.uid()));
+
 insert into storage.buckets (id, name, public)
 values ('gold-images', 'gold-images', true)
 on conflict (id) do nothing;
 ```
+
+### Full Push Setup (Supabase Edge Function)
+
+1. Firebase project ထဲက **Service Account JSON** ကို download လုပ်ပါ.
+2. Supabase secrets set:
+
+```bash
+supabase secrets set FIREBASE_PROJECT_ID=your-project-id
+supabase secrets set FIREBASE_CLIENT_EMAIL=firebase-adminsdk-xxx@your-project-id.iam.gserviceaccount.com
+supabase secrets set FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+```
+
+3. Edge Function deploy:
+
+```bash
+supabase functions deploy send-push
+```
+
+Admin dashboard က notification ပို့လိုက်တိုင်း ဒီ `send-push` function က `app_notifications` table ထဲ save လုပ်ပြီး device token တွေဆီ FCM push ပို့ပါမယ်။
 
 ## Website-Only Admin Dashboard
 

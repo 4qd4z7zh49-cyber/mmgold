@@ -1,10 +1,11 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 
 import 'package:mmgold/features/calculator/data/history_store.dart';
-import 'package:mmgold/features/calculator/domain/calculator_types.dart';
 import 'package:mmgold/features/calculator/presentation/widgets/voucher_sheet.dart';
-import 'package:mmgold/shared/utils/mm_weight.dart';
 import 'package:mmgold/shared/ads/interstitial_ad_manager.dart';
+import 'package:mmgold/shared/utils/mm_weight.dart';
 import 'package:mmgold/shared/widgets/gradient_scaffold.dart';
 
 class HistoryPage extends StatefulWidget {
@@ -16,19 +17,40 @@ class HistoryPage extends StatefulWidget {
 
 class _HistoryPageState extends State<HistoryPage> {
   late Future<List<Map<String, dynamic>>> _future;
+  late final VoidCallback _historyRevisionListener;
   final Set<String> _selectedIds = {};
 
   @override
   void initState() {
     super.initState();
     _future = HistoryStore.load();
+    _historyRevisionListener = _reload;
+    HistoryStore.revision.addListener(_historyRevisionListener);
+  }
+
+  @override
+  void dispose() {
+    HistoryStore.revision.removeListener(_historyRevisionListener);
+    super.dispose();
   }
 
   void _reload() {
+    if (!mounted) return;
     setState(() => _future = HistoryStore.load());
   }
 
   bool get _isSelectionMode => _selectedIds.isNotEmpty;
+
+  void _toggleSelect(String id) {
+    if (id.isEmpty) return;
+    setState(() {
+      if (_selectedIds.contains(id)) {
+        _selectedIds.remove(id);
+      } else {
+        _selectedIds.add(id);
+      }
+    });
+  }
 
   void _clearSelection() {
     if (_selectedIds.isEmpty) return;
@@ -47,15 +69,14 @@ class _HistoryPageState extends State<HistoryPage> {
     }
   }
 
+  double _toNum(dynamic raw) {
+    if (raw is num) return raw.toDouble();
+    return double.tryParse((raw ?? '').toString()) ?? 0;
+  }
+
   String _mmk(num v) {
     final s = v.toStringAsFixed(0);
-    final b = StringBuffer();
-    for (int i = 0; i < s.length; i++) {
-      final idx = s.length - i;
-      b.write(s[i]);
-      if (idx > 1 && idx % 3 == 1) b.write(',');
-    }
-    return b.toString();
+    return s.replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (m) => ',');
   }
 
   String _fmtDateTime(dynamic raw) {
@@ -67,53 +88,22 @@ class _HistoryPageState extends State<HistoryPage> {
     return '${two(l.day)}/${two(l.month)}/${l.year}  ${two(l.hour)}:${two(l.minute)}';
   }
 
-  double _toNum(dynamic raw) {
-    if (raw is num) return raw.toDouble();
-    return double.tryParse((raw ?? '').toString()) ?? 0;
-  }
-
-  String _normalizeNum(String raw) {
-    return raw.trim().replaceAll(',', '').replaceAll(' ', '');
-  }
-
-  double _discountAmount({
-    required String mode,
-    required String unit,
-    required double value,
-    required double baseAmount,
-  }) {
-    switch (mode) {
-      case 'mmk':
-        return value;
-      case 'percent':
-        return baseAmount * (value / 100);
-      case 'custom':
-        if (unit == DiscountUnit.percent.name) {
-          return baseAmount * (value / 100);
-        }
-        return value;
-      case 'none':
-      default:
-        return 0;
-    }
-  }
-
   Future<void> _openVoucher(Map<String, dynamic> it) async {
     final action = (it['action'] ?? '').toString();
     final isBuy = action == 'buy';
 
-    final market16 = (it['market16'] ?? 0).toDouble();
+    final market16 = _toNum(it['market16']);
     final buyTime16 = it['buyTime16'];
     final paidAmount = it['paidAmount'];
     final profitLoss = it['profitLoss'];
 
-    final weightKyattha = (it['weightKyattha'] ?? 0).toDouble();
-    final discountWeightKyattha = (it['discountWeightKyattha'] ?? 0).toDouble();
-    final netWeightKyattha = (it['netWeightKyattha'] ?? 0).toDouble();
+    final weightKyattha = _toNum(it['weightKyattha']);
+    final discountWeightKyattha = _toNum(it['discountWeightKyattha']);
+    final netWeightKyattha = _toNum(it['netWeightKyattha']);
 
-    final baseAmount = (it['baseAmount'] ?? 0).toDouble();
-    final discountAmount = (it['discountAmount'] ?? 0).toDouble();
-    final finalAmount = (it['finalAmount'] ?? 0).toDouble();
+    final baseAmount = _toNum(it['baseAmount']);
+    final discountAmount = _toNum(it['discountAmount']);
+    final finalAmount = _toNum(it['finalAmount']);
 
     await showModalBottomSheet(
       context: context,
@@ -143,33 +133,25 @@ class _HistoryPageState extends State<HistoryPage> {
     );
   }
 
-  void _toggleSelect(String id) {
-    setState(() {
-      if (_selectedIds.contains(id)) {
-        _selectedIds.remove(id);
-      } else {
-        _selectedIds.add(id);
-      }
-    });
-  }
+  Future<void> _deleteSelectedFromTopButton() async {
+    if (_selectedIds.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'ဖျက်မယ့် history row တွေကို long-press / tap နဲ့ အရင်ရွေးပါ',
+          ),
+        ),
+      );
+      return;
+    }
 
-  Future<void> _deleteSelected() async {
-    if (_selectedIds.isEmpty) return;
-    await HistoryStore.deleteMany(_selectedIds);
-    if (!mounted) return;
-    setState(() => _selectedIds.clear());
-    _reload();
-  }
-
-  Future<void> _deleteOne(Map<String, dynamic> item) async {
-    final id = (item['id'] ?? '').toString();
-    if (id.isEmpty) return;
-
+    final count = _selectedIds.length;
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Delete history'),
-        content: const Text('ဒီ history row ကို ဖျက်မှာ သေချာပါသလား?'),
+        title: const Text('Delete selected history'),
+        content: Text('ရွေးထားသော $count ခုကို ဖျက်မှာ သေချာပါသလား?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -185,277 +167,24 @@ class _HistoryPageState extends State<HistoryPage> {
 
     if (ok != true) return;
 
-    await HistoryStore.deleteMany({id});
+    await HistoryStore.deleteMany(_selectedIds);
     if (!mounted) return;
-    setState(() => _selectedIds.remove(id));
-    _reload();
-  }
-
-  Future<void> _openEditor(Map<String, dynamic> item) async {
-    final id = (item['id'] ?? '').toString();
-    if (id.isEmpty) return;
-
-    final marketCtrl = TextEditingController(text: _toNum(item['market16']).toStringAsFixed(0));
-    final weightCtrl = TextEditingController(text: _toNum(item['weightKyattha']).toStringAsFixed(6));
-    final discountCtrl = TextEditingController(text: _toNum(item['discountValue']).toStringAsFixed(2));
-    final paidCtrl = TextEditingController(
-      text: item['paidAmount'] is num ? _toNum(item['paidAmount']).toStringAsFixed(0) : '',
-    );
-
-    var action = (item['action'] ?? ActionType.buy.name).toString();
-    if (!ActionType.values.any((e) => e.name == action)) {
-      action = ActionType.buy.name;
-    }
-
-    var goldForm = (item['goldForm'] ?? GoldForm.bar.name).toString();
-    if (!GoldForm.values.any((e) => e.name == goldForm)) {
-      goldForm = GoldForm.bar.name;
-    }
-
-    final purityList = GoldPurity.factor.keys.toList(growable: false);
-    var goldType = (item['goldType'] ?? '').toString();
-    if (!purityList.contains(goldType)) {
-      goldType = purityList.first;
-    }
-
-    final discountModes = DiscountMode.values.map((e) => e.name).toList(growable: false);
-    var discountMode = (item['discountMode'] ?? DiscountMode.none.name).toString();
-    if (!discountModes.contains(discountMode)) {
-      discountMode = DiscountMode.none.name;
-    }
-
-    var discountUnit = (item['discountUnit'] ?? DiscountUnit.mmk.name).toString();
-    if (!DiscountUnit.values.any((e) => e.name == discountUnit)) {
-      discountUnit = DiscountUnit.mmk.name;
-    }
-
-    final saved = await showDialog<bool>(
-      context: context,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (ctx, setDialog) => AlertDialog(
-            title: const Text('Edit history'),
-            content: SizedBox(
-              width: 460,
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    DropdownButtonFormField<String>(
-                      initialValue: action,
-                      decoration: const InputDecoration(labelText: 'Action'),
-                      items: const [
-                        DropdownMenuItem(value: 'buy', child: Text('အဝယ်')),
-                        DropdownMenuItem(value: 'sell', child: Text('အရောင်း')),
-                      ],
-                      onChanged: (v) {
-                        if (v == null) return;
-                        setDialog(() => action = v);
-                      },
-                    ),
-                    const SizedBox(height: 10),
-                    DropdownButtonFormField<String>(
-                      initialValue: goldForm,
-                      decoration: const InputDecoration(labelText: 'Gold form'),
-                      items: const [
-                        DropdownMenuItem(value: 'bar', child: Text('အတုံး')),
-                        DropdownMenuItem(value: 'ornament', child: Text('အထည်')),
-                      ],
-                      onChanged: (v) {
-                        if (v == null) return;
-                        setDialog(() => goldForm = v);
-                      },
-                    ),
-                    const SizedBox(height: 10),
-                    DropdownButtonFormField<String>(
-                      initialValue: goldType,
-                      decoration: const InputDecoration(labelText: 'Gold type'),
-                      items: [
-                        for (final p in purityList)
-                          DropdownMenuItem(value: p, child: Text(p)),
-                      ],
-                      onChanged: (v) {
-                        if (v == null) return;
-                        setDialog(() => goldType = v);
-                      },
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: marketCtrl,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: const InputDecoration(labelText: '16 Price'),
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: weightCtrl,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: const InputDecoration(labelText: 'Weight (kyattha)'),
-                    ),
-                    const SizedBox(height: 10),
-                    DropdownButtonFormField<String>(
-                      initialValue: discountMode,
-                      decoration: const InputDecoration(labelText: 'Discount mode'),
-                      items: [
-                        for (final m in discountModes)
-                          DropdownMenuItem(value: m, child: Text(m)),
-                      ],
-                      onChanged: (v) {
-                        if (v == null) return;
-                        setDialog(() => discountMode = v);
-                      },
-                    ),
-                    const SizedBox(height: 10),
-                    if (discountMode == DiscountMode.custom.name)
-                      DropdownButtonFormField<String>(
-                        initialValue: discountUnit,
-                        decoration: const InputDecoration(labelText: 'Discount unit'),
-                        items: const [
-                          DropdownMenuItem(value: 'mmk', child: Text('MMK')),
-                          DropdownMenuItem(value: 'percent', child: Text('Percent')),
-                        ],
-                        onChanged: (v) {
-                          if (v == null) return;
-                          setDialog(() => discountUnit = v);
-                        },
-                      ),
-                    if (discountMode == DiscountMode.custom.name) const SizedBox(height: 10),
-                    TextField(
-                      controller: discountCtrl,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: const InputDecoration(labelText: 'Discount value'),
-                    ),
-                    if (action == ActionType.sell.name) ...[
-                      const SizedBox(height: 10),
-                      TextField(
-                        controller: paidCtrl,
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        decoration: const InputDecoration(labelText: 'Paid amount'),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('Save'),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-
-    if (saved != true) return;
-
-    final market16 = double.tryParse(_normalizeNum(marketCtrl.text)) ?? 0;
-    final weightKyattha = double.tryParse(_normalizeNum(weightCtrl.text)) ?? 0;
-    final discountValue = double.tryParse(_normalizeNum(discountCtrl.text)) ?? 0;
-
-    final paidAmount = action == ActionType.sell.name
-        ? double.tryParse(_normalizeNum(paidCtrl.text))
-        : null;
-
-    if (market16 <= 0 || weightKyattha <= 0) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('16 price နဲ့ weight ကို မှန်ကန်စွာထည့်ပါ')),
-      );
-      return;
-    }
-
-    final factor = GoldPurity.factor[goldType] ?? 1.0;
-    final baseAmount = market16 * weightKyattha * factor;
-
-    final effectiveUnit = discountMode == DiscountMode.custom.name
-        ? discountUnit
-        : (discountMode == DiscountMode.percent.name
-            ? DiscountUnit.percent.name
-            : DiscountUnit.mmk.name);
-
-    final discountAmount = _discountAmount(
-      mode: discountMode,
-      unit: effectiveUnit,
-      value: discountValue,
-      baseAmount: baseAmount,
-    );
-
-    final denom = market16 * factor;
-    final discountWeightKyattha = (discountAmount <= 0 || denom <= 0)
-        ? 0.0
-        : discountAmount / denom;
-
-    final netWeightKyattha = action == ActionType.buy.name
-        ? (weightKyattha + discountWeightKyattha)
-        : (weightKyattha - discountWeightKyattha);
-
-    if (netWeightKyattha < 0) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Discount ကြောင့် net weight အနုတ်မဖြစ်ရပါ')),
-      );
-      return;
-    }
-
-    final finalAmount = market16 * netWeightKyattha * factor;
-
-    double? buyTime16;
-    if (action == ActionType.sell.name && paidAmount != null && paidAmount > 0) {
-      final buyNetWeight = weightKyattha + discountWeightKyattha;
-      if (buyNetWeight > 0 && factor > 0) {
-        buyTime16 = paidAmount / (buyNetWeight * factor);
-      }
-    }
-
-    final profitLoss =
-        (action == ActionType.sell.name && paidAmount != null && paidAmount > 0)
-            ? (finalAmount - paidAmount)
-            : null;
-
-    final updated = Map<String, dynamic>.from(item)
-      ..['id'] = id
-      ..['action'] = action
-      ..['goldForm'] = goldForm
-      ..['goldType'] = goldType
-      ..['market16'] = market16
-      ..['weightKyattha'] = weightKyattha
-      ..['discountMode'] = discountMode
-      ..['discountUnit'] = effectiveUnit
-      ..['discountValue'] = discountValue
-      ..['discountAmount'] = discountAmount
-      ..['discountWeightKyattha'] = discountWeightKyattha
-      ..['netWeightKyattha'] = netWeightKyattha
-      ..['baseAmount'] = baseAmount
-      ..['finalAmount'] = finalAmount
-      ..['paidAmount'] = action == ActionType.sell.name ? paidAmount : null
-      ..['buyTime16'] = action == ActionType.sell.name ? buyTime16 : null
-      ..['profitLoss'] = profitLoss;
-
-    await HistoryStore.updateById(id: id, value: updated);
-    if (!mounted) return;
-    _reload();
-  }
-
-  Future<void> _clearAll() async {
-    await HistoryStore.clear();
-    _selectedIds.clear();
-    if (!mounted) return;
+    setState(() => _selectedIds.clear());
     _reload();
   }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final floatingNavClearance = MediaQuery.paddingOf(context).bottom + 112;
 
     return GradientScaffold(
       appBar: AppBar(
         title: Text(
-            _isSelectionMode ? 'Selected: ${_selectedIds.length}' : 'History'),
+          _isSelectionMode
+              ? 'ရွေးထားသည်: ${_selectedIds.length}'
+              : 'Calculator History',
+        ),
         leading: _isSelectionMode
             ? IconButton(
                 tooltip: 'Cancel selection',
@@ -464,18 +193,11 @@ class _HistoryPageState extends State<HistoryPage> {
               )
             : null,
         actions: [
-          if (_isSelectionMode)
-            IconButton(
-              tooltip: 'Delete selected',
-              icon: const Icon(Icons.delete),
-              onPressed: _deleteSelected,
-            )
-          else
-            IconButton(
-              tooltip: 'Clear all',
-              icon: const Icon(Icons.delete_outline),
-              onPressed: _clearAll,
-            ),
+          IconButton(
+            tooltip: 'Delete selected',
+            icon: Icon(_isSelectionMode ? Icons.delete : Icons.delete_outline),
+            onPressed: _deleteSelectedFromTopButton,
+          ),
         ],
       ),
       body: FutureBuilder<List<Map<String, dynamic>>>(
@@ -488,17 +210,17 @@ class _HistoryPageState extends State<HistoryPage> {
           }
 
           if (items.isEmpty) {
-            return const Center(child: Text('History မရှိသေးပါ'));
+            return const Center(child: Text('Calculator history မရှိသေးပါ'));
           }
 
           return ListView.separated(
-            padding: const EdgeInsets.all(16),
+            padding: EdgeInsets.fromLTRB(16, 16, 16, floatingNavClearance),
             itemCount: items.length,
             separatorBuilder: (_, __) => const SizedBox(height: 10),
             itemBuilder: (_, i) {
               final it = items[i];
               final id = (it['id'] ?? '').toString();
-              final selected = _selectedIds.contains(id);
+              final selected = id.isNotEmpty && _selectedIds.contains(id);
 
               final action = (it['action'] ?? '').toString();
               final isBuy = action == 'buy';
@@ -506,15 +228,15 @@ class _HistoryPageState extends State<HistoryPage> {
 
               final bg = selected
                   ? accent.withValues(alpha: 0.12)
-                  : cs.surfaceContainerHighest;
+                  : cs.surface.withValues(alpha: 0.56);
               final border =
                   selected ? accent.withValues(alpha: 0.55) : cs.outlineVariant;
 
               final goldType = (it['goldType'] ?? '').toString();
               final goldForm = _goldFormLabel(it['goldForm']);
 
-              final netW = (it['netWeightKyattha'] ?? 0).toDouble();
-              final finalAmount = (it['finalAmount'] ?? 0).toDouble();
+              final netW = _toNum(it['netWeightKyattha']);
+              final finalAmount = _toNum(it['finalAmount']);
               final tsText = _fmtDateTime(it['ts']);
 
               final pl = it['profitLoss'];
@@ -530,10 +252,7 @@ class _HistoryPageState extends State<HistoryPage> {
 
               return InkWell(
                 borderRadius: BorderRadius.circular(14),
-                onLongPress: () {
-                  if (id.isEmpty) return;
-                  _toggleSelect(id);
-                },
+                onLongPress: () => _toggleSelect(id),
                 onTap: () async {
                   if (id.isEmpty) return;
                   if (_isSelectionMode) {
@@ -542,100 +261,102 @@ class _HistoryPageState extends State<HistoryPage> {
                   }
                   await _openVoucher(it);
                 },
-                child: Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: bg,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: border),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 10,
-                        height: 46,
-                        decoration: BoxDecoration(
-                          color:
-                              accent.withValues(alpha: selected ? 0.9 : 0.55),
-                          borderRadius: BorderRadius.circular(999),
-                        ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                    child: Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: bg,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: border),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 10,
+                            height: 46,
+                            decoration: BoxDecoration(
+                              color: accent.withValues(
+                                  alpha: selected ? 0.9 : 0.55),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
+                                Row(
+                                  children: [
+                                    Text(
+                                      isBuy ? 'အဝယ်' : 'အရောင်း',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w900,
+                                        color: selected ? accent : cs.onSurface,
+                                      ),
+                                    ),
+                                    if (selected) ...[
+                                      const SizedBox(width: 8),
+                                      Icon(
+                                        Icons.check_circle,
+                                        color: accent,
+                                        size: 18,
+                                      ),
+                                    ],
+                                    const Spacer(),
+                                    if (tsText.isNotEmpty)
+                                      Text(
+                                        tsText,
+                                        style: TextStyle(
+                                          color: cs.onSurfaceVariant,
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
                                 Text(
-                                  isBuy ? 'အဝယ်' : 'အရောင်း',
+                                  '$goldForm • $goldType • ${MmWeight.format(netW)}',
+                                  style: TextStyle(color: cs.onSurfaceVariant),
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  'Total : ${_mmk(finalAmount)} ကျပ်',
                                   style: TextStyle(
                                     fontWeight: FontWeight.w900,
                                     color: selected ? accent : cs.onSurface,
                                   ),
                                 ),
-                                if (selected) ...[
-                                  const SizedBox(width: 8),
-                                  Icon(
-                                    Icons.check_circle,
-                                    color: accent,
-                                    size: 18,
-                                  ),
-                                ],
-                                const Spacer(),
-                                if (tsText.isNotEmpty)
+                                if (plText != null) ...[
+                                  const SizedBox(height: 6),
                                   Text(
-                                    tsText,
+                                    'Profit/Loss: $plText ကျပ်',
                                     style: TextStyle(
-                                      color: cs.onSurfaceVariant,
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 12,
+                                      color: plColor,
+                                      fontWeight: FontWeight.w800,
                                     ),
                                   ),
+                                ],
                               ],
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '$goldForm • $goldType • ${MmWeight.format(netW)}',
-                              style: TextStyle(color: cs.onSurfaceVariant),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              'Total : ${_mmk(finalAmount)} ကျပ်',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w900,
-                                color: selected ? accent : cs.onSurface,
-                              ),
-                            ),
-                            if (plText != null) ...[
-                              const SizedBox(height: 6),
-                              Text(
-                                'Profit/Loss: $plText ကျပ်',
-                                style: TextStyle(
-                                    color: plColor,
-                                    fontWeight: FontWeight.w800),
-                              ),
-                            ],
-                          ],
-                        ),
+                          ),
+                          const SizedBox(width: 8),
+                          Icon(
+                            _isSelectionMode
+                                ? (selected
+                                    ? Icons.check_circle
+                                    : Icons.radio_button_unchecked)
+                                : Icons.chevron_right_rounded,
+                            color: _isSelectionMode
+                                ? (selected ? accent : cs.outline)
+                                : cs.onSurfaceVariant,
+                          ),
+                        ],
                       ),
-                      if (!_isSelectionMode && id.isNotEmpty)
-                        Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              tooltip: 'Edit',
-                              icon: const Icon(Icons.edit_outlined),
-                              onPressed: () => _openEditor(it),
-                            ),
-                            IconButton(
-                              tooltip: 'Delete',
-                              icon: Icon(Icons.delete_outline, color: cs.error),
-                              onPressed: () => _deleteOne(it),
-                            ),
-                          ],
-                        ),
-                    ],
+                    ),
                   ),
                 ),
               );

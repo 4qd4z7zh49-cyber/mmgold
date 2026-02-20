@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'package:mmgold/shared/widgets/frosted_panel.dart';
 import 'package:mmgold/shared/widgets/gradient_scaffold.dart';
 import '../data/domain/gold_price_models.dart';
 import '../data/domain/gold_price_repo.dart';
@@ -33,66 +34,90 @@ class _GoldPriceGraphPageState extends State<GoldPriceGraphPage> {
 
     return GradientScaffold(
       appBar: AppBar(title: const Text('Graph')),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            children: [
-              DropdownButton<GraphType>(
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            FrostedPanel(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              borderRadius: BorderRadius.circular(14),
+              blurSigma: 8,
+              child: DropdownButton<GraphType>(
                 value: _type,
                 isExpanded: true,
+                underline: const SizedBox.shrink(),
                 onChanged: (v) => setState(() => _type = v!),
                 items: const [
                   DropdownMenuItem(
-                      value: GraphType.ygea16,
-                      child: Text('ရွှေအသင်းပေါက်ဈေး')),
+                    value: GraphType.ygea16,
+                    child: Text('ရွှေအသင်းပေါက်ဈေး'),
+                  ),
                   DropdownMenuItem(
-                      value: GraphType.k16Sell,
-                      child: Text('၁၆ ပဲရည် (ရောင်းဈေး)')),
+                    value: GraphType.k16Sell,
+                    child: Text('၁၆ ပဲရည် (ရောင်းဈေး)'),
+                  ),
                   DropdownMenuItem(
-                      value: GraphType.k15Sell,
-                      child: Text('၁၅ ပဲရည် (ရောင်းဈေး)')),
+                    value: GraphType.k15Sell,
+                    child: Text('၁၅ ပဲရည် (ရောင်းဈေး)'),
+                  ),
                 ],
               ),
-              const SizedBox(height: 12),
-              Expanded(
-                child: StreamBuilder<List<GoldPriceLatest>>(
-                  stream: GoldPriceRepo().historyStream(limit: 60),
-                  builder: (context, snap) {
-                    if (!snap.hasData) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-                    if (snap.hasError) {
-                      return const Center(
-                        child: Text('Graph service မချိတ်ဆက်ရသေးပါ'),
-                      );
-                    }
-                    final items = snap.data!;
-                    if (items.isEmpty) {
-                      return const Center(child: Text('No data'));
-                    }
-
-                    // Simple list preview (နောက်တစ်ဆင့်မှာ chart package သုံးချင်ရင်လည်း ပြင်လို့ရ)
-                    return ListView.builder(
-                      itemCount: items.length,
-                      itemBuilder: (_, i) {
-                        final p = items[i];
-                        final v = _pick(p);
-                        return ListTile(
-                          title: Text('${p.date ?? ''}  ${p.time ?? ''}'),
-                          trailing: Text(
-                            v == null ? '-' : v.toString(),
-                            style: tt.titleMedium
-                                ?.copyWith(fontWeight: FontWeight.w700),
-                          ),
-                        );
-                      },
+            ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: StreamBuilder<List<GoldPriceLatest>>(
+                stream: GoldPriceRepo().historyStream(limit: 60),
+                builder: (context, snap) {
+                  if (!snap.hasData) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  if (snap.hasError) {
+                    return const Center(
+                      child: Text('Graph service မချိတ်ဆက်ရသေးပါ'),
                     );
-                  },
-                ),
+                  }
+                  final items = snap.data!;
+                  if (items.isEmpty) {
+                    return const Center(child: Text('No data'));
+                  }
+
+                  return ListView.builder(
+                    itemCount: items.length,
+                    itemBuilder: (_, i) {
+                      final p = items[i];
+                      final v = _pick(p);
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: FrostedPanel(
+                          borderRadius: BorderRadius.circular(14),
+                          blurSigma: 8,
+                          startAlpha: 0.60,
+                          endAlpha: 0.42,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 10,
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text('${p.date ?? ''}  ${p.time ?? ''}'),
+                              ),
+                              Text(
+                                v == null ? '-' : v.toString(),
+                                style: tt.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                },
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

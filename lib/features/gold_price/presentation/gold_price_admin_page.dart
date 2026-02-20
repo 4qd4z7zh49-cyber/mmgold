@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:mmgold/shared/supabase/supabase_provider.dart';
+import 'package:mmgold/shared/notifications/admin_notification_sender.dart';
+import 'package:mmgold/shared/notifications/notification_destination.dart';
 import 'package:mmgold/shared/widgets/gradient_scaffold.dart';
 
 import '../data/domain/gold_price_models.dart';
@@ -281,6 +283,7 @@ class _AdminEditor extends StatefulWidget {
 class _AdminEditorState extends State<_AdminEditor> {
   final _formKey = GlobalKey<FormState>();
   final _repo = GoldPriceRepo();
+  final _notificationSender = AdminNotificationSender();
 
   final _ygea16 = TextEditingController();
   final _k16Buy = TextEditingController();
@@ -292,18 +295,24 @@ class _AdminEditorState extends State<_AdminEditor> {
   final _k15newBuy = TextEditingController();
   final _k15newSell = TextEditingController();
   final _imageUrl = TextEditingController();
+  final _notifyTitle = TextEditingController(text: 'MMGold Notification');
+  final _notifyBody = TextEditingController();
 
   bool _loading = true;
   bool _saving = false;
+  bool _sendingNotification = false;
   bool _uploadingImage = false;
   bool _historyLoading = false;
   bool _historyBusy = false;
+  String _notifyTarget = NotificationDestination.goldPrice;
+  String _updateNotifyTarget = NotificationDestination.goldPrice;
   List<_HistoryRow> _historyRows = const [];
   final ScrollController _desktopScroll = ScrollController();
   _AdminSection _selectedSection = _AdminSection.dashboard;
   final Map<_AdminSection, GlobalKey> _sectionKeys = {
     _AdminSection.dashboard: GlobalKey(),
     _AdminSection.priceUpdates: GlobalKey(),
+    _AdminSection.notifications: GlobalKey(),
     _AdminSection.imageUpload: GlobalKey(),
     _AdminSection.history: GlobalKey(),
     _AdminSection.settings: GlobalKey(),
@@ -338,6 +347,8 @@ class _AdminEditorState extends State<_AdminEditor> {
     _k15newBuy.dispose();
     _k15newSell.dispose();
     _imageUrl.dispose();
+    _notifyTitle.dispose();
+    _notifyBody.dispose();
     super.dispose();
   }
 
@@ -706,9 +717,22 @@ class _AdminEditorState extends State<_AdminEditor> {
 
       await _repo.updateLatestAutoHistory(model);
 
+      String? notifyError;
+      try {
+        await _sendPriceUpdateNotification(model);
+      } catch (_) {
+        notifyError = 'ဈေး update သိပေး notification မပို့နိုင်ပါ';
+      }
+
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('ဈေး update အောင်မြင်ပါသည်')),
+        SnackBar(
+          content: Text(
+            notifyError == null
+                ? 'ဈေး update + notification ပို့ပြီးပါပြီ'
+                : 'ဈေး update အောင်မြင်ပါသည်။ $notifyError',
+          ),
+        ),
       );
     } catch (_) {
       if (!mounted) return;
@@ -718,6 +742,62 @@ class _AdminEditorState extends State<_AdminEditor> {
     } finally {
       if (mounted) {
         setState(() => _saving = false);
+      }
+    }
+  }
+
+  Future<void> _sendPriceUpdateNotification(GoldPriceLatest model) async {
+    final buy = _money(model.k16Buy ?? 0);
+    final sell = _money(model.k16Sell ?? 0);
+
+    await _notificationSender.send(
+      title: 'ရွှေဈေး Update',
+      body: '၁၆ ပဲရည် ဝယ်: $buy ကျပ် | ရောင်း: $sell ကျပ်',
+      target: _updateNotifyTarget,
+      type: 'gold_price_update',
+      data: {
+        'k16_buy': '${model.k16Buy ?? 0}',
+        'k16_sell': '${model.k16Sell ?? 0}',
+        'date': model.date ?? '',
+        'time': model.time ?? '',
+      },
+    );
+  }
+
+  Future<void> _sendCustomNotification() async {
+    final title = _notifyTitle.text.trim();
+    final body = _notifyBody.text.trim();
+
+    if (title.isEmpty || body.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Notification title/body ထည့်ပါ')),
+      );
+      return;
+    }
+
+    setState(() => _sendingNotification = true);
+    try {
+      await _notificationSender.send(
+        title: title,
+        body: body,
+        target: _notifyTarget,
+        type: 'admin_custom',
+      );
+
+      if (!mounted) return;
+      _notifyBody.clear();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Notification ပို့ပြီးပါပြီ')),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Notification မပို့နိုင်ပါ')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _sendingNotification = false);
       }
     }
   }
@@ -753,6 +833,110 @@ class _AdminEditorState extends State<_AdminEditor> {
         _normalizeDigits(value).trim().replaceAll(',', '').replaceAll(' ', '');
     if (cleaned.isEmpty) return null;
     return int.tryParse(cleaned);
+  }
+
+  Widget _notificationPanel() {
+    final cs = Theme.of(context).colorScheme;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Push Notifications',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'ဈေး update တင်တိုင်း notification ပို့မည်။ Admin စာသားဖြင့်လည်း custom notification ပို့နိုင်ပါသည်။',
+              style: TextStyle(color: cs.onSurfaceVariant),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              initialValue: _updateNotifyTarget,
+              decoration: const InputDecoration(
+                labelText: 'Price update tap destination',
+                prefixIcon: Icon(Icons.touch_app_outlined),
+              ),
+              items: NotificationDestination.options
+                  .map(
+                    (e) => DropdownMenuItem(
+                      value: e.value,
+                      child: Text(e.label),
+                    ),
+                  )
+                  .toList(),
+              onChanged: _saving
+                  ? null
+                  : (v) {
+                      if (v == null) return;
+                      setState(() => _updateNotifyTarget = v);
+                    },
+            ),
+            const SizedBox(height: 16),
+            const Divider(height: 1),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _notifyTitle,
+              decoration: const InputDecoration(
+                labelText: 'Custom notification title',
+                prefixIcon: Icon(Icons.campaign_outlined),
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextFormField(
+              controller: _notifyBody,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                labelText: 'Custom notification body',
+                alignLabelWithHint: true,
+                prefixIcon: Icon(Icons.edit_note_outlined),
+              ),
+            ),
+            const SizedBox(height: 10),
+            DropdownButtonFormField<String>(
+              initialValue: _notifyTarget,
+              decoration: const InputDecoration(
+                labelText: 'Custom notification tap destination',
+                prefixIcon: Icon(Icons.navigation_outlined),
+              ),
+              items: NotificationDestination.options
+                  .map(
+                    (e) => DropdownMenuItem(
+                      value: e.value,
+                      child: Text(e.label),
+                    ),
+                  )
+                  .toList(),
+              onChanged: _sendingNotification
+                  ? null
+                  : (v) {
+                      if (v == null) return;
+                      setState(() => _notifyTarget = v);
+                    },
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed:
+                    _sendingNotification ? null : _sendCustomNotification,
+                icon: _sendingNotification
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.send_outlined),
+                label: const Text('Send Custom Notification'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _historyManagerPanel() {
@@ -911,6 +1095,12 @@ class _AdminEditorState extends State<_AdminEditor> {
                   Icons.currency_exchange_rounded,
                   _selectedSection == _AdminSection.priceUpdates,
                   () => _jumpTo(_AdminSection.priceUpdates),
+                ),
+                _menuTile(
+                  'Notifications',
+                  Icons.notifications_active_outlined,
+                  _selectedSection == _AdminSection.notifications,
+                  () => _jumpTo(_AdminSection.notifications),
                 ),
                 _menuTile(
                   'Image Upload',
@@ -1104,6 +1294,11 @@ class _AdminEditorState extends State<_AdminEditor> {
                 ),
                 const SizedBox(height: 16),
                 Container(
+                  key: _sectionKeys[_AdminSection.notifications],
+                  child: _notificationPanel(),
+                ),
+                const SizedBox(height: 16),
+                Container(
                   key: _sectionKeys[_AdminSection.history],
                   child: _historyManagerPanel(),
                 ),
@@ -1234,6 +1429,8 @@ class _AdminEditorState extends State<_AdminEditor> {
                       ),
                     ),
                     const SizedBox(height: 16),
+                    _notificationPanel(),
+                    const SizedBox(height: 16),
                     _historyManagerPanel(),
                   ],
                 ),
@@ -1341,6 +1538,7 @@ class _HistoryRow {
 enum _AdminSection {
   dashboard,
   priceUpdates,
+  notifications,
   imageUpload,
   history,
   settings,

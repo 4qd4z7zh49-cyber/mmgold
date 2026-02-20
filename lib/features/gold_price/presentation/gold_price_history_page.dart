@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:mmgold/shared/widgets/frosted_panel.dart';
 import 'package:mmgold/shared/widgets/gradient_scaffold.dart';
 import '../data/domain/gold_price_repo.dart';
 import '../data/domain/gold_price_models.dart';
@@ -41,73 +42,70 @@ class GoldPriceHistoryPage extends StatelessWidget {
 
               return Padding(
                 padding: const EdgeInsets.only(bottom: 16),
-                child: Card(
-                  elevation: 4,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // ===== Date / Time =====
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              p.date ?? '',
-                              style: t.labelMedium,
-                            ),
-                            Text(
-                              p.time ?? '',
-                              style: t.labelMedium,
-                            ),
-                          ],
-                        ),
-
-                        const SizedBox(height: 8),
-                        Divider(color: cs.outlineVariant),
-                        const SizedBox(height: 8),
-
-                        // ===== External Market Price =====
-                        Text(
-                          'ပြင်ပပေါက်ဈေး',
-                          style: t.titleMedium,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          _money(p.ygea16),
-                          style: t.titleLarge,
-                        ),
-                        if (p.imageUrl != null &&
-                            p.imageUrl!.trim().isNotEmpty) ...[
-                          const SizedBox(height: 10),
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(10),
-                            child: Image.network(
-                              p.imageUrl!,
-                              height: 120,
-                              width: double.infinity,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => const SizedBox(),
-                            ),
+                child: FrostedPanel(
+                  borderRadius: BorderRadius.circular(16),
+                  padding: const EdgeInsets.all(16),
+                  startAlpha: 0.60,
+                  endAlpha: 0.40,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // ===== Date / Time =====
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            p.date ?? '',
+                            style: t.labelMedium,
+                          ),
+                          Text(
+                            p.time ?? '',
+                            style: t.labelMedium,
                           ),
                         ],
+                      ),
 
-                        const SizedBox(height: 12),
+                      const SizedBox(height: 8),
+                      Divider(color: cs.outlineVariant),
+                      const SizedBox(height: 8),
 
-                        // ===== Sections =====
-                        _section(context, '၁၆ ပဲရည်',
-                            buy: p.k16Buy, sell: p.k16Sell),
-                        _section(context, '၁၆ ပဲရည် စနစ်သစ်',
-                            buy: p.k16NewBuy, sell: p.k16NewSell),
-                        _section(context, '၁၅ ပဲရည်',
-                            buy: p.k15Buy, sell: p.k15Sell),
-                        _section(context, '၁၅ ပဲရည် စနစ်သစ်',
-                            buy: p.k15NewBuy, sell: p.k15NewSell),
+                      // ===== External Market Price =====
+                      Text(
+                        'ပြင်ပပေါက်ဈေး',
+                        style: t.titleMedium,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _money(p.ygea16),
+                        style: t.titleLarge,
+                      ),
+                      if (p.imageUrl != null &&
+                          p.imageUrl!.trim().isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: Image.network(
+                            p.imageUrl!,
+                            height: 120,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => const SizedBox(),
+                          ),
+                        ),
                       ],
-                    ),
+
+                      const SizedBox(height: 12),
+
+                      // ===== Sections =====
+                      _section(context, '၁၆ ပဲရည်',
+                          buy: p.k16Buy, sell: p.k16Sell),
+                      _section(context, '၁၆ ပဲရည် စနစ်သစ်',
+                          buy: p.k16NewBuy, sell: p.k16NewSell),
+                      _section(context, '၁၅ ပဲရည်',
+                          buy: p.k15Buy, sell: p.k15Sell),
+                      _section(context, '၁၅ ပဲရည် စနစ်သစ်',
+                          buy: p.k15NewBuy, sell: p.k15NewSell),
+                    ],
                   ),
                 ),
               );
@@ -153,22 +151,13 @@ class GoldPriceHistoryPage extends StatelessWidget {
 
   Widget _priceBox(BuildContext context, String label, int? value) {
     final t = Theme.of(context).textTheme;
-    final cs = Theme.of(context).colorScheme;
-
-    return Container(
+    return FrostedPanel(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 6,
-            offset: Offset(0, 3), // subtle 3D feel
-          ),
-        ],
-        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.6)),
-      ),
+      borderRadius: BorderRadius.circular(12),
+      blurSigma: 8,
+      startAlpha: 0.62,
+      endAlpha: 0.44,
+      borderAlpha: 0.56,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

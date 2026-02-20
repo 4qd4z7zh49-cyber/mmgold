@@ -1,34 +1,88 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
+import 'package:mmgold/shared/navigation/app_shell_controller.dart';
 
 import 'features/calculator/presentation/calculator_page.dart';
 import 'features/history/presentation/history_page.dart';
+import 'features/holdings/presentation/my_holdings_page.dart';
 import 'features/gold_price/presentation/gold_price_page.dart';
 
 class AppShell extends StatefulWidget {
-  const AppShell({super.key}); // ✅ const
+  final int initialIndex;
+
+  const AppShell({
+    super.key,
+    this.initialIndex = 0,
+  });
+
   @override
   State<AppShell> createState() => _AppShellState();
 }
 
 class _AppShellState extends State<AppShell> {
+  static const int _tabCount = 4;
+
   int _index = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _index = _clampIndex(widget.initialIndex);
+    final queued = AppShellController.takeQueuedInitialTab();
+    if (queued != null) {
+      _index = _clampIndex(queued);
+    }
+    AppShellController.markAttached();
+    AppShellController.tabRequests.addListener(_handleTabRequest);
+  }
 
   final List<Widget> pages = const [
     GoldPricePage(),
+    MyHoldingsPage(),
     CalculatorPage(),
     HistoryPage(),
   ];
 
+  int _clampIndex(int value) {
+    if (value < 0) return 0;
+    if (value >= _tabCount) return _tabCount - 1;
+    return value;
+  }
+
+  void _handleTabRequest() {
+    final requested = AppShellController.tabRequests.value;
+    if (requested == null) return;
+    if (!mounted) return;
+    setState(() => _index = _clampIndex(requested));
+    AppShellController.consumeRequest();
+  }
+
+  @override
+  void dispose() {
+    AppShellController.tabRequests.removeListener(_handleTabRequest);
+    AppShellController.markDetached();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(
-        index: _index,
-        children: pages,
-      ),
-      bottomNavigationBar: _TelegramStyleNavBar(
-        currentIndex: _index,
-        onTap: (i) => setState(() => _index = i),
+      extendBody: true,
+      body: Stack(
+        children: [
+          IndexedStack(
+            index: _index,
+            children: pages,
+          ),
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: _TelegramStyleNavBar(
+              currentIndex: _index,
+              onTap: (i) => setState(() => _index = i),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -49,6 +103,10 @@ class _TelegramStyleNavBar extends StatelessWidget {
       label: 'ဈေး',
     ),
     _NavTab(
+      icon: Icons.savings_outlined,
+      label: 'စုဘူး',
+    ),
+    _NavTab(
       icon: Icons.calculate_rounded,
       label: 'တွက်ချက်',
     ),
@@ -61,79 +119,93 @@ class _TelegramStyleNavBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final selectedBg = Color.alphaBlend(
+      const Color(0xFFE2C35A).withValues(alpha: 0.22),
+      cs.surface,
+    );
+    final selectedFg = const Color(0xFFB8860B);
 
     return SafeArea(
-      minimum: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-      child: Container(
-        padding: const EdgeInsets.all(6),
-        decoration: BoxDecoration(
-          color: cs.surface.withValues(alpha: 0.94),
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(
-            color: cs.outlineVariant.withValues(alpha: 0.65),
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.10),
-              blurRadius: 24,
-              offset: const Offset(0, 8),
+      minimum: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(999),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+            decoration: BoxDecoration(
+              color: cs.surface.withValues(alpha: 0.58),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(
+                color: cs.outlineVariant.withValues(alpha: 0.60),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.10),
+                  blurRadius: 24,
+                  offset: const Offset(0, 9),
+                ),
+              ],
             ),
-          ],
-        ),
-        child: Row(
-          children: List.generate(_tabs.length, (i) {
-            final tab = _tabs[i];
-            final selected = i == currentIndex;
+            child: Row(
+              children: List.generate(_tabs.length, (i) {
+                final tab = _tabs[i];
+                final selected = i == currentIndex;
 
-            return Expanded(
-              child: GestureDetector(
-                onTap: () => onTap(i),
-                behavior: HitTestBehavior.opaque,
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 220),
-                  curve: Curves.easeOutCubic,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: selected ? cs.primaryContainer : Colors.transparent,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        tab.icon,
-                        size: 22,
-                        color: selected ? cs.primary : cs.onSurfaceVariant,
+                return Expanded(
+                  child: GestureDetector(
+                    onTap: () => onTap(i),
+                    behavior: HitTestBehavior.opaque,
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 220),
+                      curve: Curves.easeOutCubic,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 8,
                       ),
-                      AnimatedSize(
-                        duration: const Duration(milliseconds: 220),
-                        curve: Curves.easeOutCubic,
-                        child: selected
-                            ? Padding(
-                                padding: const EdgeInsets.only(left: 8),
-                                child: Text(
-                                  tab.label,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.fade,
-                                  softWrap: false,
-                                  style: TextStyle(
-                                    color: cs.primary,
-                                    fontWeight: FontWeight.w700,
-                                    height: 1.05,
-                                    leadingDistribution:
-                                        TextLeadingDistribution.even,
+                      decoration: BoxDecoration(
+                        color: selected ? selectedBg : Colors.transparent,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            tab.icon,
+                            size: 23,
+                            color: selected ? selectedFg : cs.onSurfaceVariant,
+                          ),
+                          if (selected)
+                            Flexible(
+                              child: AnimatedSize(
+                                duration: const Duration(milliseconds: 220),
+                                curve: Curves.easeOutCubic,
+                                child: Padding(
+                                  padding: const EdgeInsets.only(left: 8),
+                                  child: Text(
+                                    tab.label,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    softWrap: false,
+                                    style: TextStyle(
+                                      color: selectedFg,
+                                      fontWeight: FontWeight.w800,
+                                      height: 1.05,
+                                      leadingDistribution:
+                                          TextLeadingDistribution.even,
+                                    ),
                                   ),
                                 ),
-                              )
-                            : const SizedBox.shrink(),
+                              ),
+                            ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
-                ),
-              ),
-            );
-          }),
+                );
+              }),
+            ),
+          ),
         ),
       ),
     );

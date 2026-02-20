@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -10,7 +12,6 @@ import '../data/history_store.dart';
 import '../domain/calculator_types.dart';
 
 import 'widgets/weight_inputs.dart';
-import 'widgets/discount_selector.dart';
 import 'widgets/voucher_sheet.dart';
 
 class CalculatorPage extends StatefulWidget {
@@ -40,15 +41,17 @@ class _CalculatorPageState extends State<CalculatorPage> {
   final _wPae = TextEditingController();
   final _wYway = TextEditingController();
 
+  // 7) discount weight
+  final _dKyat = TextEditingController();
+  final _dPae = TextEditingController();
+  final _dYway = TextEditingController();
+
   // SELL: user enters paid amount
   final _paidAmountCtrl = TextEditingController();
 
   // SELL: auto-inferred buy-time 16-pae price
   final _buyTimePriceCtrl = TextEditingController();
   double? _buyTimePrice16;
-
-  // 3) discount (NEW)
-  DiscountValue _discountValue = DiscountValue.none;
 
   Widget _segmentLabel(String text) {
     return Text(
@@ -96,20 +99,107 @@ class _CalculatorPageState extends State<CalculatorPage> {
     EdgeInsetsGeometry padding = const EdgeInsets.all(16),
   }) {
     final cs = Theme.of(context).colorScheme;
-    return Card(
-      elevation: 0,
-      color: cs.surfaceContainerHighest,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                cs.surface.withValues(alpha: 0.58),
+                cs.surfaceContainerHighest.withValues(alpha: 0.38),
+              ],
+            ),
+            border: Border.all(
+              color: cs.outlineVariant.withValues(alpha: 0.55),
+            ),
+          ),
+          child: Padding(
+            padding: padding,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _sectionHeader(context, title, icon),
+                child,
+              ],
+            ),
+          ),
+        ),
       ),
-      child: Padding(
-        padding: padding,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _sectionHeader(context, title, icon),
-            child,
-          ],
+    );
+  }
+
+  Widget _heroHeader(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(24),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+        child: Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(24),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                cs.primaryContainer.withValues(alpha: 0.52),
+                cs.secondaryContainer.withValues(alpha: 0.34),
+              ],
+            ),
+            border: Border.all(
+              color: cs.primary.withValues(alpha: 0.26),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: cs.primary.withValues(alpha: 0.08),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 20),
+            child: Row(
+              children: [
+                Container(
+                  width: 46,
+                  height: 46,
+                  decoration: BoxDecoration(
+                    color: cs.surface.withValues(alpha: 0.62),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(Icons.savings_outlined, color: cs.primary),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'ရွှေစုဘူး',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.3,
+                            ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Premium Calculator Experience',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: cs.onSurfaceVariant,
+                              fontWeight: FontWeight.w600,
+                            ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -124,6 +214,9 @@ class _CalculatorPageState extends State<CalculatorPage> {
     _wKyat.addListener(_recomputeBuyTimePriceIfPossible);
     _wPae.addListener(_recomputeBuyTimePriceIfPossible);
     _wYway.addListener(_recomputeBuyTimePriceIfPossible);
+    _dKyat.addListener(_recomputeBuyTimePriceIfPossible);
+    _dPae.addListener(_recomputeBuyTimePriceIfPossible);
+    _dYway.addListener(_recomputeBuyTimePriceIfPossible);
     _marketPriceCtrl.addListener(_recomputeBuyTimePriceIfPossible);
   }
 
@@ -133,6 +226,9 @@ class _CalculatorPageState extends State<CalculatorPage> {
     _wKyat.dispose();
     _wPae.dispose();
     _wYway.dispose();
+    _dKyat.dispose();
+    _dPae.dispose();
+    _dYway.dispose();
     _paidAmountCtrl.dispose();
     _buyTimePriceCtrl.dispose();
     super.dispose();
@@ -143,13 +239,15 @@ class _CalculatorPageState extends State<CalculatorPage> {
     _wKyat.clear();
     _wPae.clear();
     _wYway.clear();
+    _dKyat.clear();
+    _dPae.clear();
+    _dYway.clear();
     _paidAmountCtrl.clear();
     _buyTimePriceCtrl.clear();
 
     setState(() {
       _action = ActionType.buy;
       _goldForm = GoldForm.bar;
-      _discountValue = DiscountValue.none;
       _goldType = '16 ပဲရည်';
       _buyTimePrice16 = null;
     });
@@ -164,33 +262,21 @@ class _CalculatorPageState extends State<CalculatorPage> {
 
   double _toDouble(TextEditingController c) => _parseInput(c.text);
 
-  // Discount amount supports MMK / Percent (including CUSTOM)
-  double _discountAmount(double baseAmount) {
-    switch (_discountValue.mode) {
-      case DiscountMode.none:
-        return 0;
-
-      case DiscountMode.mmk:
-        return _discountValue.value;
-
-      case DiscountMode.percent:
-        return baseAmount * (_discountValue.value / 100);
-
-      case DiscountMode.custom:
-        return _discountValue.unit == DiscountUnit.percent
-            ? baseAmount * (_discountValue.value / 100)
-            : _discountValue.value;
-    }
+  double _discountWeightInputKyattha() {
+    return MmWeight.toKyattha(
+      kyat: _toDouble(_dKyat),
+      pae: _toDouble(_dPae),
+      yway: _toDouble(_dYway),
+    );
   }
 
-  double _discountWeightKyattha({
+  double _discountAmountFromWeight({
     required double market16,
     required double factor,
-    required double discountAmount,
+    required double discountWeightKyattha,
   }) {
-    final denom = market16 * factor;
-    if (discountAmount <= 0 || denom <= 0) return 0.0;
-    return discountAmount / denom;
+    if (market16 <= 0 || factor <= 0 || discountWeightKyattha <= 0) return 0.0;
+    return market16 * factor * discountWeightKyattha;
   }
 
   // SELL: Paid amount -> infer buy-time 16-pae price
@@ -213,21 +299,12 @@ class _CalculatorPageState extends State<CalculatorPage> {
       yway: _toDouble(_wYway),
     );
 
-    final market16 = _toDouble(_marketPriceCtrl);
-    final factor = GoldPurity.factor[_goldType] ?? 1.0;
-
-    final baseAmount = market16 * weightKyattha * factor;
-    final discountAmount = _discountAmount(baseAmount);
-
-    final dW = _discountWeightKyattha(
-      market16: market16,
-      factor: factor,
-      discountAmount: discountAmount,
-    );
+    final dW = _discountWeightInputKyattha();
 
     // buy-time inference uses BUY rule: add discount weight
     final buyTimeNetWeight = weightKyattha + dW;
 
+    final factor = GoldPurity.factor[_goldType] ?? 1.0;
     if (paid <= 0 || buyTimeNetWeight <= 0 || factor <= 0) {
       if (_buyTimePrice16 != null || _buyTimePriceCtrl.text.isNotEmpty) {
         setState(() => _buyTimePrice16 = null);
@@ -254,12 +331,11 @@ class _CalculatorPageState extends State<CalculatorPage> {
     );
 
     final baseAmount = market16 * weightKyattha * factor;
-    final discountAmount = _discountAmount(baseAmount);
-
-    final discountWeightKyattha = _discountWeightKyattha(
+    final discountWeightKyattha = _discountWeightInputKyattha();
+    final discountAmount = _discountAmountFromWeight(
       market16: market16,
       factor: factor,
-      discountAmount: discountAmount,
+      discountWeightKyattha: discountWeightKyattha,
     );
 
     final netWeightKyattha = (_action == ActionType.buy)
@@ -287,6 +363,7 @@ class _CalculatorPageState extends State<CalculatorPage> {
     final id = DateTime.now().millisecondsSinceEpoch.toString();
     await HistoryStore.add({
       'id': id,
+      'historyType': 'calculator',
       'ts': DateTime.now().toIso8601String(),
       'action': _action.name,
       'goldForm': _goldForm.name,
@@ -300,8 +377,12 @@ class _CalculatorPageState extends State<CalculatorPage> {
       'netWeightKyattha': netWeightKyattha,
       'baseAmount': baseAmount,
       'discountAmount': discountAmount,
-      'discountMode': _discountValue.mode.name,
-      'discountValue': _discountValue.value,
+      'discountMode': DiscountMode.mmk.name,
+      'discountUnit': DiscountUnit.mmk.name,
+      'discountValue': discountAmount,
+      'discountKyat': _toDouble(_dKyat),
+      'discountPae': _toDouble(_dPae),
+      'discountYway': _toDouble(_dYway),
       'finalAmount': finalAmount,
     });
 
@@ -341,6 +422,7 @@ class _CalculatorPageState extends State<CalculatorPage> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final floatingNavClearance = MediaQuery.paddingOf(context).bottom + 112;
 
     return GradientScaffold(
       appBar: AppBar(
@@ -353,221 +435,250 @@ class _CalculatorPageState extends State<CalculatorPage> {
           ),
         ],
       ),
-      body: SafeArea(
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              // 1) Buy / Sell
-              _sectionCard(
-                context: context,
-                title: 'Buy / Sell',
-                icon: Icons.swap_horiz_rounded,
-                padding: const EdgeInsets.all(12),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: FloatingSegmented<ActionType>(
-                    segments: [
-                      ButtonSegment(
-                        value: ActionType.buy,
-                        label: _segmentLabel('အဝယ်'),
-                      ),
-                      ButtonSegment(
-                        value: ActionType.sell,
-                        label: _segmentLabel('အရောင်း'),
-                      ),
-                    ],
-                    selected: {_action},
-                    showSelectedIcon: false,
-                    onSelectionChanged: (s) {
-                      HapticFeedback.selectionClick();
-                      setState(() => _action = s.first);
-                      _recomputeBuyTimePriceIfPossible();
-                    },
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
+      body: Form(
+        key: _formKey,
+        child: ListView(
+          padding: EdgeInsets.fromLTRB(16, 16, 16, floatingNavClearance),
+          children: [
+            _heroHeader(context),
+            const SizedBox(height: 16),
 
-              // 2) Gold form (အတုံး/အထည်)
-              _sectionCard(
-                context: context,
-                title: 'ရွှေအမျိုးအစား (အတုံး / အထည်)',
-                icon: Icons.category_outlined,
-                child: SizedBox(
-                  width: double.infinity,
-                  child: FloatingSegmented<GoldForm>(
-                    segments: [
-                      ButtonSegment(
-                        value: GoldForm.bar,
-                        label: _segmentLabel('အတုံး'),
-                      ),
-                      ButtonSegment(
-                        value: GoldForm.ornament,
-                        label: _segmentLabel('အထည်'),
-                      ),
-                    ],
-                    selected: {_goldForm},
-                    showSelectedIcon: false,
-                    onSelectionChanged: (s) {
-                      HapticFeedback.selectionClick();
-                      setState(() {
-                        _goldForm = s.first;
-                        _discountValue = DiscountValue.none;
-                      });
-                      _recomputeBuyTimePriceIfPossible();
-                    },
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              // 3) Discount
-              _sectionCard(
-                context: context,
-                title: 'အလျော့တွက်',
-                icon: Icons.local_offer_outlined,
-                child: DiscountSelector(
-                  isOrnament: _goldForm == GoldForm.ornament,
-                  value: _discountValue,
-                  onChanged: (v) {
-                    HapticFeedback.selectionClick();
-                    setState(() => _discountValue = v);
-                    _recomputeBuyTimePriceIfPossible();
-                  },
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              // 4) Purity (16/15...)
-              _sectionCard(
-                context: context,
-                title: 'ရွှေအရည်အသွေး',
-                icon: Icons.workspace_premium_outlined,
-                child: DropdownButtonFormField<String>(
-                  key: ValueKey(_goldType),
-                  initialValue: _goldType,
-                  decoration: const InputDecoration(
-                    labelText: 'ရွေးချယ်ပါ',
-                    prefixIcon: Icon(Icons.workspace_premium_outlined),
-                  ),
-                  items: GoldPurity.factor.keys
-                      .map((k) => DropdownMenuItem(value: k, child: Text(k)))
-                      .toList(),
-                  onChanged: (v) {
-                    setState(() => _goldType = v ?? '16 ပဲရည်');
-                    _recomputeBuyTimePriceIfPossible();
-                  },
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              // 5) Market price 16
-              _sectionCard(
-                context: context,
-                title: 'လက်ရှိ ၁၆ ပဲရည် ပေါက်ဈေး',
-                icon: Icons.payments_outlined,
-                child: TextFormField(
-                  controller: _marketPriceCtrl,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'ကျပ် (ဥပမာ 10,500,000)',
-                    prefixIcon: Icon(Icons.payments_outlined),
-                  ),
-                  validator: (v) {
-                    final x = _parseInput(v);
-                    if (x <= 0) return 'ပေါက်ဈေး ထည့်ပါ';
-                    return null;
-                  },
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              // 6) Weight
-              _sectionCard(
-                context: context,
-                title: 'အလေးချိန် (ကျပ် / ပဲ / ရွေး)',
-                icon: Icons.scale_outlined,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    WeightInputs(
-                        kyatCtrl: _wKyat, paeCtrl: _wPae, ywayCtrl: _wYway),
-                    const SizedBox(height: 16),
-                    AnimatedOpacity(
-                      duration: const Duration(milliseconds: 180),
-                      opacity: _action == ActionType.sell ? 1.0 : 0.35,
-                      child: IgnorePointer(
-                        ignoring: _action != ActionType.sell,
-                        child: Column(
-                          children: [
-                            TextFormField(
-                              controller: _paidAmountCtrl,
-                              keyboardType: TextInputType.number,
-                              decoration: const InputDecoration(
-                                labelText: 'ဝယ်ခဲ့စဉ် ပေးခဲ့ရတဲ့စျေး (ကျပ်)',
-                                helperText: 'Sell mode မှာသာ လိုအပ်ပါသည်',
-                                prefixIcon: Icon(Icons.receipt_long_outlined),
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            TextFormField(
-                              controller: _buyTimePriceCtrl,
-                              readOnly: true,
-                              decoration: const InputDecoration(
-                                labelText:
-                                    'မိမိဝယ်ချိန်မှ ၁၆ ပဲရည် ရွှေဈေး (Auto) (ကျပ်)',
-                                prefixIcon: Icon(Icons.price_change_outlined),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+            // 1) Buy / Sell
+            _sectionCard(
+              context: context,
+              title: 'Buy / Sell',
+              icon: Icons.swap_horiz_rounded,
+              padding: const EdgeInsets.all(12),
+              child: SizedBox(
+                width: double.infinity,
+                child: FloatingSegmented<ActionType>(
+                  segments: [
+                    ButtonSegment(
+                      value: ActionType.buy,
+                      label: _segmentLabel('အဝယ်'),
+                    ),
+                    ButtonSegment(
+                      value: ActionType.sell,
+                      label: _segmentLabel('အရောင်း'),
                     ),
                   ],
+                  selected: {_action},
+                  showSelectedIcon: false,
+                  onSelectionChanged: (s) {
+                    HapticFeedback.selectionClick();
+                    setState(() => _action = s.first);
+                    _recomputeBuyTimePriceIfPossible();
+                  },
                 ),
               ),
-              const SizedBox(height: 20),
+            ),
+            const SizedBox(height: 16),
 
-              Row(
+            // 2) Gold form (အတုံး/အထည်)
+            _sectionCard(
+              context: context,
+              title: 'ရွှေအမျိုးအစား (အတုံး / အထည်)',
+              icon: Icons.category_outlined,
+              child: SizedBox(
+                width: double.infinity,
+                child: FloatingSegmented<GoldForm>(
+                  segments: [
+                    ButtonSegment(
+                      value: GoldForm.bar,
+                      label: _segmentLabel('အတုံး'),
+                    ),
+                    ButtonSegment(
+                      value: GoldForm.ornament,
+                      label: _segmentLabel('အထည်'),
+                    ),
+                  ],
+                  selected: {_goldForm},
+                  showSelectedIcon: false,
+                  onSelectionChanged: (s) {
+                    HapticFeedback.selectionClick();
+                    setState(() => _goldForm = s.first);
+                    _recomputeBuyTimePriceIfPossible();
+                  },
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // 3) Discount
+            _sectionCard(
+              context: context,
+              title: 'အလျော့တွက် (ကျပ် / ပဲ / ရွေး)',
+              icon: Icons.local_offer_outlined,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: FilledButton(
-                      style: FilledButton.styleFrom(
-                        minimumSize: const Size.fromHeight(52),
-                        backgroundColor: cs.primary,
-                      ),
-                      onPressed: () {
-                        HapticFeedback.lightImpact();
-                        _calculate();
-                      },
-                      child: const Text(
-                        'Calculate',
-                        style: TextStyle(fontWeight: FontWeight.w800),
+                  WeightInputs(
+                    kyatCtrl: _dKyat,
+                    paeCtrl: _dPae,
+                    ywayCtrl: _dYway,
+                    allowEmpty: true,
+                    helperText:
+                        'အလျော့ချိန်ကို ကျပ်/ပဲ/ရွေး နဲ့ထည့်ပါ (မထည့်လျှင် 0)',
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // 4) Purity (16/15...)
+            _sectionCard(
+              context: context,
+              title: 'ရွှေအရည်အသွေး',
+              icon: Icons.workspace_premium_outlined,
+              child: DropdownButtonFormField<String>(
+                key: ValueKey(_goldType),
+                initialValue: _goldType,
+                decoration: const InputDecoration(
+                  labelText: 'ရွေးချယ်ပါ',
+                  prefixIcon: Icon(Icons.workspace_premium_outlined),
+                ),
+                items: GoldPurity.factor.keys
+                    .map((k) => DropdownMenuItem(value: k, child: Text(k)))
+                    .toList(),
+                onChanged: (v) {
+                  setState(() => _goldType = v ?? '16 ပဲရည်');
+                  _recomputeBuyTimePriceIfPossible();
+                },
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // 5) Market price 16
+            _sectionCard(
+              context: context,
+              title: 'လက်ရှိ ၁၆ ပဲရည် ပေါက်ဈေး',
+              icon: Icons.payments_outlined,
+              child: TextFormField(
+                controller: _marketPriceCtrl,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'ကျပ် (ဥပမာ 10,500,000)',
+                  prefixIcon: Icon(Icons.payments_outlined),
+                ),
+                validator: (v) {
+                  final x = _parseInput(v);
+                  if (x <= 0) return 'ပေါက်ဈေး ထည့်ပါ';
+                  return null;
+                },
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // 6) Weight
+            _sectionCard(
+              context: context,
+              title: 'အလေးချိန် (ကျပ် / ပဲ / ရွေး)',
+              icon: Icons.scale_outlined,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: cs.outlineVariant.withValues(alpha: 0.45),
                       ),
                     ),
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'အလေးချိန် ထည့်သွင်းပါ',
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleSmall
+                              ?.copyWith(fontWeight: FontWeight.w800),
+                        ),
+                        const SizedBox(height: 10),
+                        WeightInputs(
+                          kyatCtrl: _wKyat,
+                          paeCtrl: _wPae,
+                          ywayCtrl: _wYway,
+                        ),
+                      ],
+                    ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: OutlinedButton(
-                      style: OutlinedButton.styleFrom(
-                        minimumSize: const Size.fromHeight(52),
-                      ),
-                      onPressed: () {
-                        HapticFeedback.selectionClick();
-                        _reset();
-                      },
-                      child: const Text(
-                        'Reset',
-                        style: TextStyle(fontWeight: FontWeight.w700),
+                  const SizedBox(height: 16),
+                  AnimatedOpacity(
+                    duration: const Duration(milliseconds: 180),
+                    opacity: _action == ActionType.sell ? 1.0 : 0.35,
+                    child: IgnorePointer(
+                      ignoring: _action != ActionType.sell,
+                      child: Column(
+                        children: [
+                          TextFormField(
+                            controller: _paidAmountCtrl,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              labelText: 'ဝယ်ခဲ့စဉ် ပေးခဲ့ရတဲ့စျေး (ကျပ်)',
+                              helperText: 'Sell mode မှာသာ လိုအပ်ပါသည်',
+                              prefixIcon: Icon(Icons.receipt_long_outlined),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          TextFormField(
+                            controller: _buyTimePriceCtrl,
+                            readOnly: true,
+                            decoration: const InputDecoration(
+                              labelText:
+                                  'မိမိဝယ်ချိန်မှ ၁၆ ပဲရည် ရွှေဈေး (Auto) (ကျပ်)',
+                              prefixIcon: Icon(Icons.price_change_outlined),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
                 ],
               ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 20),
+
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton(
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size.fromHeight(52),
+                      backgroundColor: cs.primary,
+                    ),
+                    onPressed: () {
+                      HapticFeedback.lightImpact();
+                      _calculate();
+                    },
+                    child: const Text(
+                      'Calculate',
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size.fromHeight(52),
+                    ),
+                    onPressed: () {
+                      HapticFeedback.selectionClick();
+                      _reset();
+                    },
+                    child: const Text(
+                      'Reset',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );

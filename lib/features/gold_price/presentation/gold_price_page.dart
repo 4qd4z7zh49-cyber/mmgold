@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:mmgold/shared/widgets/frosted_panel.dart';
 import 'package:mmgold/shared/widgets/gradient_scaffold.dart';
 import '../data/domain/gold_price_repo.dart';
 import '../data/domain/gold_price_models.dart';
@@ -39,6 +40,7 @@ class _GoldPricePageState extends State<GoldPricePage> {
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
     final cs = Theme.of(context).colorScheme;
+    final floatingNavClearance = MediaQuery.paddingOf(context).bottom + 112;
 
     return GradientScaffold(
       appBar: AppBar(
@@ -87,119 +89,115 @@ class _GoldPricePageState extends State<GoldPricePage> {
           }
 
           return SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: Card(
-              elevation: 4,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // ===== Header =====
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(p.date ?? '', style: t.labelMedium),
-                        Text(p.time ?? '', style: t.labelMedium),
-                      ],
+            padding: EdgeInsets.fromLTRB(16, 16, 16, floatingNavClearance),
+            child: FrostedPanel(
+              borderRadius: BorderRadius.circular(20),
+              padding: const EdgeInsets.all(16),
+              startAlpha: 0.60,
+              endAlpha: 0.40,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ===== Header =====
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(p.date ?? '', style: t.labelMedium),
+                      Text(p.time ?? '', style: t.labelMedium),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'ရွှေအသင်းပေါက်ဈေး',
+                    style: t.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'ရွှေအသင်းပေါက်ဈေး',
-                      style: t.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      _money(p.ygea16),
-                      style: t.titleLarge,
-                    ),
-                    if (p.imageUrl != null &&
-                        p.imageUrl!.trim().isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: Image.network(
-                          p.imageUrl!,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Container(
-                            height: 120,
-                            alignment: Alignment.center,
-                            color: cs.surfaceContainerHighest,
-                            child: const Text('Image မဖော်နိုင်ပါ'),
-                          ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    _money(p.ygea16),
+                    style: t.titleLarge,
+                  ),
+                  if (p.imageUrl != null && p.imageUrl!.trim().isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Image.network(
+                        p.imageUrl!,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          height: 120,
+                          alignment: Alignment.center,
+                          color: cs.surface.withValues(alpha: 0.42),
+                          child: const Text('Image မဖော်နိုင်ပါ'),
                         ),
                       ),
-                    ],
-
-                    const SizedBox(height: 12),
-                    Divider(color: cs.outlineVariant),
-                    const SizedBox(height: 12),
-
-                    Text('ပြင်ပပေါက်ဈေးများ', style: t.titleMedium),
-                    const SizedBox(height: 12),
-
-                    // ===== 16 K =====
-                    _sectionTitle(context, '၁၆ ပဲရည်'),
-                    if (_delta(p.k16Sell, prev?.k16Sell) != null) ...[
-                      _deltaBadge(context, _delta(p.k16Sell, prev?.k16Sell)!),
-                      const SizedBox(height: 8),
-                    ],
-                    _priceRow(
-                      context,
-                      buy: p.k16Buy,
-                      sell: p.k16Sell,
-                    ),
-
-                    const SizedBox(height: 12),
-
-                    // ===== 16 New =====
-                    _sectionTitle(context, '၁၆ ပဲရည် စနစ်သစ်'),
-                    if (_delta(p.k16NewSell, prev?.k16NewSell) != null) ...[
-                      _deltaBadge(
-                          context, _delta(p.k16NewSell, prev?.k16NewSell)!),
-                      const SizedBox(height: 8),
-                    ],
-                    _priceRow(
-                      context,
-                      buy: p.k16NewBuy,
-                      sell: p.k16NewSell,
-                    ),
-
-                    const SizedBox(height: 12),
-
-                    // ===== 15 K =====
-                    _sectionTitle(context, '၁၅ ပဲရည်'),
-                    if (_delta(p.k15Sell, prev?.k15Sell) != null) ...[
-                      _deltaBadge(context, _delta(p.k15Sell, prev?.k15Sell)!),
-                      const SizedBox(height: 8),
-                    ],
-                    _priceRow(
-                      context,
-                      buy: p.k15Buy,
-                      sell: p.k15Sell,
-                    ),
-
-                    const SizedBox(height: 12),
-
-                    // ===== 15 New =====
-                    _sectionTitle(context, '၁၅ ပဲရည် စနစ်သစ်'),
-                    if (_delta(p.k15NewSell, prev?.k15NewSell) != null) ...[
-                      _deltaBadge(
-                          context, _delta(p.k15NewSell, prev?.k15NewSell)!),
-                      const SizedBox(height: 8),
-                    ],
-                    _priceRow(
-                      context,
-                      buy: p.k15NewBuy,
-                      sell: p.k15NewSell,
                     ),
                   ],
-                ),
+
+                  const SizedBox(height: 12),
+                  Divider(color: cs.outlineVariant),
+                  const SizedBox(height: 12),
+
+                  Text('ပြင်ပပေါက်ဈေးများ', style: t.titleMedium),
+                  const SizedBox(height: 12),
+
+                  // ===== 16 K =====
+                  _sectionTitle(context, '၁၆ ပဲရည်'),
+                  if (_delta(p.k16Sell, prev?.k16Sell) != null) ...[
+                    _deltaBadge(context, _delta(p.k16Sell, prev?.k16Sell)!),
+                    const SizedBox(height: 8),
+                  ],
+                  _priceRow(
+                    context,
+                    buy: p.k16Buy,
+                    sell: p.k16Sell,
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  // ===== 16 New =====
+                  _sectionTitle(context, '၁၆ ပဲရည် စနစ်သစ်'),
+                  if (_delta(p.k16NewSell, prev?.k16NewSell) != null) ...[
+                    _deltaBadge(
+                        context, _delta(p.k16NewSell, prev?.k16NewSell)!),
+                    const SizedBox(height: 8),
+                  ],
+                  _priceRow(
+                    context,
+                    buy: p.k16NewBuy,
+                    sell: p.k16NewSell,
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  // ===== 15 K =====
+                  _sectionTitle(context, '၁၅ ပဲရည်'),
+                  if (_delta(p.k15Sell, prev?.k15Sell) != null) ...[
+                    _deltaBadge(context, _delta(p.k15Sell, prev?.k15Sell)!),
+                    const SizedBox(height: 8),
+                  ],
+                  _priceRow(
+                    context,
+                    buy: p.k15Buy,
+                    sell: p.k15Sell,
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  // ===== 15 New =====
+                  _sectionTitle(context, '၁၅ ပဲရည် စနစ်သစ်'),
+                  if (_delta(p.k15NewSell, prev?.k15NewSell) != null) ...[
+                    _deltaBadge(
+                        context, _delta(p.k15NewSell, prev?.k15NewSell)!),
+                    const SizedBox(height: 8),
+                  ],
+                  _priceRow(
+                    context,
+                    buy: p.k15NewBuy,
+                    sell: p.k15NewSell,
+                  ),
+                ],
               ),
             ),
           );
@@ -285,36 +283,13 @@ class _GoldPricePageState extends State<GoldPricePage> {
     int? value,
   }) {
     final t = Theme.of(context).textTheme;
-    final cs = Theme.of(context).colorScheme;
-    final base = cs.surface.withValues(alpha: 0.9);
-
-    return Container(
+    return FrostedPanel(
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: base,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.10),
-            blurRadius: 16,
-            offset: const Offset(0, 10),
-          ),
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-          BoxShadow(
-            color: cs.surface.withValues(alpha: 0.72),
-            blurRadius: 10,
-            offset: const Offset(-4, -4),
-          ),
-        ],
-        border: Border.all(
-          color: cs.outlineVariant.withValues(alpha: 0.6),
-          width: 1,
-        ),
-      ),
+      borderRadius: BorderRadius.circular(14),
+      blurSigma: 8,
+      startAlpha: 0.62,
+      endAlpha: 0.44,
+      borderAlpha: 0.56,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

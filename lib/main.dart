@@ -2,14 +2,57 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
+import 'app_shell.dart';
 import 'features/access/presentation/welcome_gate.dart';
 import 'features/gold_price/presentation/gold_price_admin_page.dart';
 import 'shared/ads/interstitial_ad_manager.dart';
+import 'shared/navigation/app_shell_controller.dart';
+import 'shared/notifications/app_notification_service.dart';
+import 'shared/notifications/notification_destination.dart';
 import 'shared/supabase/supabase_provider.dart';
+
+final GlobalKey<NavigatorState> _appNavigatorKey = GlobalKey<NavigatorState>();
+
+bool _supportsPushNotifications() {
+  return !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS);
+}
+
+void _openNotificationTarget(String target) {
+  final tabIndex =
+      NotificationDestination.tabIndexFor(NotificationDestination.normalize(
+    target,
+  ));
+  if (tabIndex == null) return;
+
+  if (AppShellController.isAttached) {
+    AppShellController.openTab(tabIndex);
+    return;
+  }
+
+  AppShellController.openTab(tabIndex);
+
+  final nav = _appNavigatorKey.currentState;
+  if (nav == null) return;
+
+  nav.pushAndRemoveUntil(
+    MaterialPageRoute(builder: (_) => AppShell(initialIndex: tabIndex)),
+    (route) => false,
+  );
+}
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await SupabaseProvider.initialize();
+  String? initialNotificationTarget;
+
+  if (_supportsPushNotifications()) {
+    try {
+      initialNotificationTarget = await AppNotificationService.instance
+          .initialize(onTarget: _openNotificationTarget);
+    } catch (_) {}
+  }
 
   if (!kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.android ||
@@ -18,11 +61,16 @@ Future<void> main() async {
     await InterstitialAdManager.instance.initialize();
   }
 
-  runApp(const MyanmarGoldApp());
+  runApp(MyanmarGoldApp(initialNotificationTarget: initialNotificationTarget));
 }
 
 class MyanmarGoldApp extends StatelessWidget {
-  const MyanmarGoldApp({super.key});
+  final String? initialNotificationTarget;
+
+  const MyanmarGoldApp({
+    super.key,
+    this.initialNotificationTarget,
+  });
 
   static const bool _adminOnlyWebBuild =
       bool.fromEnvironment('ADMIN_ONLY_WEB', defaultValue: false);
@@ -89,6 +137,8 @@ class MyanmarGoldApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isAdminWeb = kIsWeb && (_adminOnlyWebBuild || _isAdminWebRoute());
+    final initialTab =
+        NotificationDestination.tabIndexFor(initialNotificationTarget);
 
     final base = ColorScheme.fromSeed(
       seedColor: const Color(0xFFC79A2A),
@@ -112,6 +162,7 @@ class MyanmarGoldApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'မြန်မာ့ရွှေ Calculator',
+      navigatorKey: _appNavigatorKey,
       routes: {
         '/admin': (_) => const GoldPriceAdminPage(),
       },
@@ -136,25 +187,27 @@ class MyanmarGoldApp extends StatelessWidget {
           iconTheme: IconThemeData(color: cs.onSurface),
         ),
         cardTheme: CardThemeData(
-          color: cs.surface.withValues(alpha: 0.92),
+          color: cs.surface.withValues(alpha: 0.60),
           elevation: 0,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(18),
-            side: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.6)),
+            side: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.56)),
           ),
         ),
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
-          fillColor: cs.surface,
+          fillColor: cs.surface.withValues(alpha: 0.62),
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide(color: cs.outlineVariant),
+            borderSide:
+                BorderSide(color: cs.outlineVariant.withValues(alpha: 0.72)),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide(color: cs.outlineVariant),
+            borderSide:
+                BorderSide(color: cs.outlineVariant.withValues(alpha: 0.72)),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
@@ -181,7 +234,11 @@ class MyanmarGoldApp extends StatelessWidget {
         ),
         textTheme: _buildTextTheme(cs),
       ),
-      home: isAdminWeb ? const GoldPriceAdminPage() : const WelcomeGate(),
+      home: isAdminWeb
+          ? const GoldPriceAdminPage()
+          : (initialTab == null
+              ? const WelcomeGate()
+              : AppShell(initialIndex: initialTab)),
     );
   }
 }

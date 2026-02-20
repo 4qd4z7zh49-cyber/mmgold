@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -61,6 +62,7 @@ class VoucherSheet extends StatefulWidget {
 class _VoucherSheetState extends State<VoucherSheet> {
   bool _busy = false;
   final GlobalKey _captureKey = GlobalKey();
+  static const MethodChannel _filesChannel = MethodChannel('mmgold/files');
 
   void _snack(String msg) {
     if (!mounted) return;
@@ -381,23 +383,26 @@ class _VoucherSheetState extends State<VoucherSheet> {
     setState(() => _busy = true);
     try {
       final bytes = await _capturePngBytes();
+      final fileName = _pngFileName();
 
-      Directory dir;
-      if (Platform.isAndroid) {
-        dir = (await getExternalStorageDirectory()) ??
-            await getApplicationDocumentsDirectory();
-      } else {
-        dir = await getApplicationDocumentsDirectory();
+      if (!kIsWeb && Platform.isAndroid) {
+        final savedPath =
+            await _filesChannel.invokeMethod<String>('saveImageToDownloads', {
+          'bytes': bytes,
+          'fileName': fileName,
+          'mimeType': 'image/png',
+        });
+        if (savedPath != null && savedPath.isNotEmpty) {
+          _snack('Download ထဲသို့သိမ်းပြီးပါပြီ\n$savedPath');
+          return;
+        }
       }
 
+      final dir = await getApplicationDocumentsDirectory();
       final outDir = Directory('${dir.path}/mmgold');
-      if (!await outDir.exists()) {
-        await outDir.create(recursive: true);
-      }
-
-      final file = File('${outDir.path}/${_pngFileName()}');
+      if (!await outDir.exists()) await outDir.create(recursive: true);
+      final file = File('${outDir.path}/$fileName');
       await file.writeAsBytes(bytes);
-
       _snack('Image saved ✅\n${file.path}');
     } catch (e) {
       _snack('Save Image မလုပ်နိုင်ပါ: $e');
@@ -691,17 +696,24 @@ class _VoucherSheetState extends State<VoucherSheet> {
                     child: Column(
                       children: [
                         Expanded(
-                          child: SingleChildScrollView(child: mainCard),
+                          child: LayoutBuilder(
+                            builder: (context, constraints) {
+                              return FittedBox(
+                                alignment: Alignment.topCenter,
+                                fit: BoxFit.contain,
+                                child: SizedBox(
+                                  width: constraints.maxWidth,
+                                  child: mainCard,
+                                ),
+                              );
+                            },
+                          ),
                         ),
                         const SizedBox(height: 12),
 
-                        // ✅ Solid actions (no transparent)
-                        Wrap(
-                          spacing: 10,
-                          runSpacing: 10,
+                        Row(
                           children: [
-                            SizedBox(
-                              width: 170,
+                            Expanded(
                               child: FilledButton.icon(
                                 onPressed: _busy ? null : _saveImage,
                                 style: _solidPill(context),
@@ -710,28 +722,38 @@ class _VoucherSheetState extends State<VoucherSheet> {
                                         width: 16,
                                         height: 16,
                                         child: CircularProgressIndicator(
-                                            strokeWidth: 2),
+                                          strokeWidth: 2,
+                                        ),
                                       )
-                                    : const Icon(Icons.image_outlined),
-                                label: const Text('Save Image'),
+                                    : const Icon(Icons.image_outlined, size: 18),
+                                label: const Text(
+                                  'Save Image',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
                             ),
-                            SizedBox(
-                              width: 170,
+                            const SizedBox(width: 8),
+                            Expanded(
                               child: FilledButton.icon(
                                 onPressed: _busy ? null : _sharePdf,
                                 style: _solidPill(context),
-                                icon: const Icon(Icons.share_outlined),
-                                label: const Text('Share PDF'),
+                                icon: const Icon(Icons.share_outlined, size: 18),
+                                label: const Text(
+                                  'Share PDF',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
                             ),
-                            SizedBox(
-                              width: 170,
+                            const SizedBox(width: 8),
+                            Expanded(
                               child: FilledButton.icon(
                                 onPressed: () => _close(context),
                                 style: _solidPill(context),
-                                icon: const Icon(Icons.close),
-                                label: const Text('Close'),
+                                icon: const Icon(Icons.close, size: 18),
+                                label: const Text(
+                                  'Close',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
                             ),
                           ],

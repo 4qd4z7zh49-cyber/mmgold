@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 
 class GradientScaffold extends StatelessWidget {
@@ -11,6 +13,70 @@ class GradientScaffold extends StatelessWidget {
     required this.body,
     this.bottomNavigationBar,
   });
+
+  PreferredSizeWidget? _resolveAppBar(BuildContext context) {
+    if (appBar is! AppBar) return appBar;
+
+    final cs = Theme.of(context).colorScheme;
+    final raw = appBar as AppBar;
+    final baseFrost = ClipRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                cs.surface.withValues(alpha: 0.50),
+                cs.surface.withValues(alpha: 0.22),
+              ],
+            ),
+            border: Border(
+              bottom: BorderSide(
+                color: cs.outlineVariant.withValues(alpha: 0.38),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final mergedFlexible = raw.flexibleSpace == null
+        ? baseFrost
+        : Stack(
+            fit: StackFit.expand,
+            children: [
+              baseFrost,
+              raw.flexibleSpace!,
+            ],
+          );
+
+    return AppBar(
+      leading: raw.leading,
+      automaticallyImplyLeading: raw.automaticallyImplyLeading,
+      title: raw.title,
+      actions: raw.actions,
+      bottom: raw.bottom,
+      centerTitle: raw.centerTitle,
+      titleSpacing: raw.titleSpacing,
+      leadingWidth: raw.leadingWidth,
+      toolbarHeight: raw.toolbarHeight,
+      elevation: raw.elevation,
+      scrolledUnderElevation: raw.scrolledUnderElevation,
+      foregroundColor: raw.foregroundColor,
+      iconTheme: raw.iconTheme,
+      actionsIconTheme: raw.actionsIconTheme,
+      titleTextStyle: raw.titleTextStyle,
+      toolbarTextStyle: raw.toolbarTextStyle,
+      shape: raw.shape,
+      systemOverlayStyle: raw.systemOverlayStyle,
+      shadowColor: raw.shadowColor,
+      surfaceTintColor: Colors.transparent,
+      backgroundColor: Colors.transparent,
+      flexibleSpace: mergedFlexible,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -47,7 +113,7 @@ class GradientScaffold extends StatelessWidget {
           ),
           Scaffold(
             backgroundColor: Colors.transparent,
-            appBar: appBar,
+            appBar: _resolveAppBar(context),
             body: body,
             bottomNavigationBar: bottomNavigationBar,
           ),
