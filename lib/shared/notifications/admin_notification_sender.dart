@@ -38,19 +38,27 @@ class AdminNotificationSender {
   }
 
   Future<String> _requireJwtAccessToken() async {
-    var session = SupabaseProvider.client.auth.currentSession;
+    final auth = SupabaseProvider.client.auth;
+    var session = auth.currentSession;
 
     if (session == null) {
       throw StateError('Not signed in. Please sign in again.');
     }
 
-    if (session.isExpired) {
-      final refreshed = await SupabaseProvider.client.auth.refreshSession();
-      session =
-          refreshed.session ?? SupabaseProvider.client.auth.currentSession;
+    // Refresh proactively so we don't send stale/rotated tokens to Edge Functions.
+    try {
+      final refreshed = await auth.refreshSession();
+      session = refreshed.session ?? auth.currentSession ?? session;
+    } catch (_) {
+      // Keep current session as fallback. We'll validate below.
     }
 
-    final raw = session?.accessToken.trim() ?? '';
+    final current = session;
+    if (current == null) {
+      throw StateError('Session expired. Please sign out and sign in again.');
+    }
+
+    final raw = current.accessToken.trim();
     final token =
         raw.toLowerCase().startsWith('bearer ') ? raw.substring(7).trim() : raw;
 
@@ -59,6 +67,13 @@ class AdminNotificationSender {
     if (token.split('.').length != 3) {
       throw StateError(
           'Invalid session token. Please sign out and sign in again.');
+    }
+
+    // Validate token against Supabase Auth before invoking Edge Function.
+    try {
+      await auth.getUser(token);
+    } catch (_) {
+      throw StateError('Session expired. Please sign out and sign in again.');
     }
 
     return token;
