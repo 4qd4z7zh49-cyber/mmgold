@@ -236,9 +236,7 @@ class MyanmarGoldApp extends StatelessWidget {
       ),
       home: isAdminWeb
           ? const GoldPriceAdminPage()
-          : (initialTab == null
-              ? const WelcomeGate()
-              : AppShell(initialIndex: initialTab)),
+          : WelcomeGate(initialTab: initialTab),
     );
   }
 }

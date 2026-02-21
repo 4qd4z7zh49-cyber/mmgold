@@ -753,7 +753,7 @@ class _AdminEditorState extends State<_AdminEditor> {
 
     await _notificationSender.send(
       title: 'ရွှေဈေး Update',
-      body: '၁၆ ပဲရည် ဝယ်: $buy ကျပ် | ရောင်း: $sell ကျပ်',
+      body: '၁၆ ပဲရည်\nဝယ်: $buy ကျပ်\nရောင်း: $sell ကျပ်',
       target: _updateNotifyTarget,
       type: 'gold_price_update',
       data: {

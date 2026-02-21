@@ -25,6 +25,7 @@ class AppNotificationService {
   static const String _tokenTable = 'app_push_tokens';
   static const String _androidChannelId = 'mmgold_updates';
   static const String _androidChannelName = 'MMGold Updates';
+  static const String _androidSmallIcon = 'ic_stat_mmgold';
   static const String _androidChannelDescription =
       'Gold price updates and admin announcements';
 
@@ -115,7 +116,8 @@ class AppNotificationService {
   Future<void> _configureFirebaseMessaging() async {
     final messaging = FirebaseMessaging.instance;
 
-    await _registerPushToken(await messaging.getToken());
+    final token = await _getTokenWithRetry(messaging);
+    await _registerPushToken(token);
     messaging.onTokenRefresh.listen((token) {
       _registerPushToken(token);
     });
@@ -126,9 +128,24 @@ class AppNotificationService {
     });
   }
 
+  Future<String?> _getTokenWithRetry(
+    FirebaseMessaging messaging, {
+    int retries = 5,
+  }) async {
+    for (var i = 0; i < retries; i++) {
+      final token = (await messaging.getToken())?.trim() ?? '';
+      if (token.isNotEmpty) return token;
+      await Future<void>.delayed(const Duration(seconds: 2));
+    }
+    return null;
+  }
+
   Future<void> _registerPushToken(String? token) async {
     final clean = (token ?? '').trim();
-    if (clean.isEmpty) return;
+    if (clean.isEmpty) {
+      debugPrint('Push token is empty (FCM returned null/empty).');
+      return;
+    }
 
     final payload = <String, dynamic>{
       'token': clean,
@@ -142,13 +159,24 @@ class AppNotificationService {
       await SupabaseProvider.client
           .from(_tokenTable)
           .upsert(payload, onConflict: 'token');
-    } catch (_) {}
+      debugPrint('Push token saved: ${clean.substring(0, 16)}...');
+    } catch (upsertError) {
+      debugPrint('Push token upsert failed: $upsertError');
+      try {
+        await SupabaseProvider.client.from(_tokenTable).insert(payload);
+        debugPrint('Push token inserted via fallback insert.');
+      } catch (insertError) {
+        debugPrint('Push token insert fallback failed: $insertError');
+      }
+    }
   }
 
   Future<void> _onForegroundMessage(RemoteMessage message) async {
     final notification = message.notification;
     final title = notification?.title ?? _stringOf(message.data['title']);
-    final body = notification?.body ?? _stringOf(message.data['body']);
+    final body = _normalizeNotificationBody(
+      notification?.body ?? _stringOf(message.data['body']),
+    );
     final target = _extractTarget(message.data);
 
     if (title.trim().isEmpty || body.trim().isEmpty) return;
@@ -157,15 +185,21 @@ class AppNotificationService {
       DateTime.now().millisecondsSinceEpoch.remainder(2147483647),
       title,
       body,
-      const NotificationDetails(
+      NotificationDetails(
         android: AndroidNotificationDetails(
           _androidChannelId,
           _androidChannelName,
+          icon: _androidSmallIcon,
           channelDescription: _androidChannelDescription,
           importance: Importance.max,
           priority: Priority.high,
+          styleInformation: BigTextStyleInformation(
+            body,
+            contentTitle: title,
+            summaryText: _androidChannelName,
+          ),
         ),
-        iOS: DarwinNotificationDetails(),
+        iOS: const DarwinNotificationDetails(),
       ),
       payload: jsonEncode({'target': target}),
     );
@@ -222,5 +256,22 @@ class AppNotificationService {
   String _stringOf(dynamic raw) {
     if (raw == null) return '';
     return raw.toString();
+  }
+
+  String _normalizeNotificationBody(String raw) {
+    if (raw.trim().isEmpty) return '';
+
+    final normalizedNewLines = raw
+        .replaceAll('\r\n', '\n')
+        .replaceAll('\r', '\n')
+        .replaceAll(' | ', '\n');
+
+    final lines = normalizedNewLines
+        .split('\n')
+        .map((line) => line.replaceAll(RegExp(r'\s+'), ' ').trim())
+        .where((line) => line.isNotEmpty)
+        .toList();
+
+    return lines.join('\n');
   }
 }

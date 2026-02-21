@@ -287,6 +287,7 @@ async function sendOneFcmMessage(args: {
           priority: "HIGH",
           notification: {
             channel_id: "mmgold_updates",
+            icon: "ic_stat_mmgold",
             sound: "default",
           },
         },

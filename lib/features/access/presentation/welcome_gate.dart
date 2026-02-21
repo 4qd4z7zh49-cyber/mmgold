@@ -5,7 +5,12 @@ import '../../../shared/navigation/app_shell_controller.dart';
 import '../../../shared/widgets/gradient_scaffold.dart';
 
 class WelcomeGate extends StatefulWidget {
-  const WelcomeGate({super.key});
+  final int? initialTab;
+
+  const WelcomeGate({
+    super.key,
+    this.initialTab,
+  });
 
   @override
   State<WelcomeGate> createState() => _WelcomeGateState();
@@ -22,6 +27,7 @@ class _WelcomeGateState extends State<WelcomeGate>
   late final Animation<double> _haloScale;
   late final Animation<double> _buttonOpacity;
   late final Animation<Offset> _buttonSlide;
+  bool _opened = false;
 
   @override
   void initState() {
@@ -81,7 +87,10 @@ class _WelcomeGateState extends State<WelcomeGate>
       ),
     );
 
-    _controller.forward();
+    final animation = _controller.forward();
+    if (widget.initialTab != null) {
+      animation.whenCompleteOrCancel(_openApp);
+    }
   }
 
   @override
@@ -201,15 +210,7 @@ class _WelcomeGateState extends State<WelcomeGate>
                 child: SizedBox(
                   width: double.infinity,
                   child: FilledButton(
-                    onPressed: () {
-                      final initialTab =
-                          AppShellController.takeQueuedInitialTab() ?? 0;
-                      Navigator.of(context).pushReplacement(
-                        MaterialPageRoute(
-                          builder: (_) => AppShell(initialIndex: initialTab),
-                        ),
-                      );
-                    },
+                    onPressed: _openApp,
                     child: const Text('Get Started'),
                   ),
                 ),
@@ -217,6 +218,20 @@ class _WelcomeGateState extends State<WelcomeGate>
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _openApp() {
+    if (_opened || !mounted) return;
+    _opened = true;
+
+    final queuedInitialTab = AppShellController.takeQueuedInitialTab();
+    final initialTab = queuedInitialTab ?? widget.initialTab ?? 0;
+
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => AppShell(initialIndex: initialTab),
       ),
     );
   }
